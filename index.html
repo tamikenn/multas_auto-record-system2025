@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MULTAs v2.1 - 医学実習レポート自動生成システム（AI分類対応）</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- PDF生成用ライブラリ -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
         /* === ベーススタイル === */
         * {
@@ -3618,6 +3621,11 @@ ${currentDay === '5' ?
                         <h4>💡 AIによるフィードバック</h4>
                         <div class="ai-feedback">${aiSummary}</div>
                     </div>
+                    <div style="text-align: center; margin-top: 20px;">
+                        <button onclick="downloadDayReportPDF('${currentDay}')" style="background: linear-gradient(135deg, #74b9ff 0%, #0984e3 100%); color: white; border: none; padding: 10px 25px; border-radius: 20px; font-size: 14px; cursor: pointer; box-shadow: 0 3px 10px rgba(0,0,0,0.2);">
+                            📥 このレポートをPDFでダウンロード
+                        </button>
+                    </div>
                 </div>
             `;
 
@@ -5047,8 +5055,254 @@ ${allTexts}
         }
         
         // === PDF出力機能 ===
-        function downloadSummaryReportPDF() {
+        async function downloadSummaryReportPDF() {
             showStatus('📄 PDF生成中...', 'info');
+            showLoadingIndicator('PDFを生成しています...');
+            
+            try {
+                // jsPDFインスタンスを作成（A4サイズ）
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF('p', 'mm', 'a4');
+                
+                // 日本語フォントの設定（ブラウザ標準フォントを使用）
+                pdf.setFont('helvetica');
+                
+                // ページ設定
+                const pageWidth = pdf.internal.pageSize.getWidth();
+                const pageHeight = pdf.internal.pageSize.getHeight();
+                const margin = 20;
+                let yPosition = margin;
+                
+                // === 表紙ページ ===
+                pdf.setFontSize(24);
+                pdf.text('MULTAs 実習レポート', pageWidth / 2, yPosition, { align: 'center' });
+                
+                yPosition += 15;
+                pdf.setFontSize(16);
+                pdf.text('Medical University Learning and Training Assessment system', pageWidth / 2, yPosition, { align: 'center' });
+                
+                yPosition += 30;
+                pdf.setFontSize(14);
+                pdf.text(`学生ID: ${currentUser.id}`, margin, yPosition);
+                yPosition += 10;
+                pdf.text(`レベル: ${userLevel}`, margin, yPosition);
+                yPosition += 10;
+                pdf.text(`総記録数: ${records.length}件`, margin, yPosition);
+                yPosition += 10;
+                pdf.text(`作成日: ${new Date().toLocaleDateString('ja-JP')}`, margin, yPosition);
+                
+                // === 総合統計ページ ===
+                pdf.addPage();
+                yPosition = margin;
+                pdf.setFontSize(18);
+                pdf.text('総合統計', margin, yPosition);
+                yPosition += 15;
+                
+                // カテゴリ別集計
+                const categoryStats = {};
+                records.forEach(record => {
+                    const cat = record.category || 0;
+                    categoryStats[cat] = (categoryStats[cat] || 0) + 1;
+                });
+                
+                pdf.setFontSize(12);
+                Object.entries(categoryStats).forEach(([catId, count]) => {
+                    const category = AI_CATEGORIES[catId];
+                    if (category && count > 0) {
+                        pdf.text(`${category.name}: ${count}件`, margin, yPosition);
+                        yPosition += 8;
+                        if (yPosition > pageHeight - margin) {
+                            pdf.addPage();
+                            yPosition = margin;
+                        }
+                    }
+                });
+                
+                // === レーダーチャート ===
+                const radarCanvas = document.getElementById('summaryRadarChart');
+                if (radarCanvas) {
+                    try {
+                        const imgData = await html2canvas(radarCanvas).then(canvas => canvas.toDataURL('image/png'));
+                        pdf.addPage();
+                        pdf.setFontSize(18);
+                        pdf.text('学習バランス（レーダーチャート）', pageWidth / 2, margin, { align: 'center' });
+                        pdf.addImage(imgData, 'PNG', (pageWidth - 120) / 2, margin + 10, 120, 120);
+                    } catch (error) {
+                        console.error('レーダーチャート画像化エラー:', error);
+                    }
+                }
+                
+                // === 日別詳細レポート ===
+                const days = ['1', '2', '3', '4', '5'];
+                for (const day of days) {
+                    const dayRecords = records.filter(r => String(r.day) === day);
+                    if (dayRecords.length > 0) {
+                        pdf.addPage();
+                        yPosition = margin;
+                        pdf.setFontSize(18);
+                        pdf.text(`${day}日目のレポート（${dayRecords.length}件）`, margin, yPosition);
+                        yPosition += 15;
+                        
+                        pdf.setFontSize(10);
+                        dayRecords.forEach((record, index) => {
+                            if (yPosition > pageHeight - margin * 2) {
+                                pdf.addPage();
+                                yPosition = margin;
+                            }
+                            
+                            const category = AI_CATEGORIES[record.category] || AI_CATEGORIES[0];
+                            const time = new Date(record.timestamp).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+                            
+                            pdf.text(`${index + 1}. [${time}] ${category.name}`, margin, yPosition);
+                            yPosition += 6;
+                            
+                            // テキストを折り返し
+                            const lines = pdf.splitTextToSize(record.originalText, pageWidth - margin * 2);
+                            lines.forEach(line => {
+                                if (yPosition > pageHeight - margin) {
+                                    pdf.addPage();
+                                    yPosition = margin;
+                                }
+                                pdf.text(line, margin + 5, yPosition);
+                                yPosition += 5;
+                            });
+                            yPosition += 5;
+                        });
+                    }
+                }
+                
+                // === 考察・振り返り欄 ===
+                pdf.addPage();
+                yPosition = margin;
+                pdf.setFontSize(18);
+                pdf.text('考察・振り返り', margin, yPosition);
+                yPosition += 15;
+                
+                pdf.setFontSize(12);
+                pdf.text('実習を通しての学び：', margin, yPosition);
+                yPosition += 40;
+                
+                pdf.text('今後の課題：', margin, yPosition);
+                yPosition += 40;
+                
+                pdf.text('指導医へのコメント：', margin, yPosition);
+                
+                // === 署名欄 ===
+                yPosition = pageHeight - margin * 3;
+                pdf.line(margin, yPosition, margin + 60, yPosition);
+                pdf.text('学生署名', margin, yPosition + 5);
+                
+                pdf.line(pageWidth - margin - 60, yPosition, pageWidth - margin, yPosition);
+                pdf.text('日付', pageWidth - margin - 60, yPosition + 5);
+                
+                // PDFを保存
+                const fileName = `MULTAs_Report_${currentUser.id}_${new Date().toISOString().split('T')[0]}.pdf`;
+                pdf.save(fileName);
+                
+                hideLoadingIndicator();
+                showStatus('✅ PDFのダウンロードが完了しました', 'success');
+                
+            } catch (error) {
+                console.error('PDF生成エラー:', error);
+                hideLoadingIndicator();
+                showStatus('❌ PDF生成中にエラーが発生しました', 'error');
+                
+                // フォールバック：ブラウザの印刷機能を使用
+                fallbackPrintReport();
+            }
+        }
+        
+        // === 日別レポートPDFダウンロード ===
+        async function downloadDayReportPDF(day) {
+            showStatus('📄 PDF生成中...', 'info');
+            showLoadingIndicator('PDFを生成しています...');
+            
+            try {
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF('p', 'mm', 'a4');
+                
+                pdf.setFont('helvetica');
+                
+                const pageWidth = pdf.internal.pageSize.getWidth();
+                const pageHeight = pdf.internal.pageSize.getHeight();
+                const margin = 20;
+                let yPosition = margin;
+                
+                // タイトル
+                pdf.setFontSize(20);
+                pdf.text(`MULTAs ${day === 'practice' ? '練習用' : `${day}日目`}実習レポート`, pageWidth / 2, yPosition, { align: 'center' });
+                
+                yPosition += 20;
+                pdf.setFontSize(12);
+                pdf.text(`学生ID: ${currentUser.id}`, margin, yPosition);
+                yPosition += 8;
+                pdf.text(`作成日: ${new Date().toLocaleDateString('ja-JP')}`, margin, yPosition);
+                yPosition += 15;
+                
+                // 記録詳細
+                const dayRecords = records.filter(r => String(r.day) === String(day));
+                pdf.setFontSize(14);
+                pdf.text(`記録数: ${dayRecords.length}件`, margin, yPosition);
+                yPosition += 15;
+                
+                // カテゴリ別記録
+                pdf.setFontSize(10);
+                dayRecords.forEach((record, index) => {
+                    if (yPosition > pageHeight - margin * 2) {
+                        pdf.addPage();
+                        yPosition = margin;
+                    }
+                    
+                    const category = AI_CATEGORIES[record.category] || AI_CATEGORIES[0];
+                    const time = new Date(record.timestamp).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+                    
+                    pdf.text(`${index + 1}. [${time}] ${category.name}`, margin, yPosition);
+                    yPosition += 6;
+                    
+                    const lines = pdf.splitTextToSize(record.originalText, pageWidth - margin * 2);
+                    lines.forEach(line => {
+                        if (yPosition > pageHeight - margin) {
+                            pdf.addPage();
+                            yPosition = margin;
+                        }
+                        pdf.text(line, margin + 5, yPosition);
+                        yPosition += 5;
+                    });
+                    yPosition += 5;
+                });
+                
+                // レーダーチャート（可能な場合）
+                const radarCanvas = document.getElementById('radarChart');
+                if (radarCanvas && radarCanvas.style.display !== 'none') {
+                    try {
+                        pdf.addPage();
+                        pdf.setFontSize(16);
+                        pdf.text('学習バランス', pageWidth / 2, margin, { align: 'center' });
+                        
+                        const imgData = await html2canvas(radarCanvas).then(canvas => canvas.toDataURL('image/png'));
+                        pdf.addImage(imgData, 'PNG', (pageWidth - 100) / 2, margin + 10, 100, 100);
+                    } catch (error) {
+                        console.error('レーダーチャート画像化エラー:', error);
+                    }
+                }
+                
+                // PDFを保存
+                const fileName = `MULTAs_DayReport_${currentUser.id}_Day${day}_${new Date().toISOString().split('T')[0]}.pdf`;
+                pdf.save(fileName);
+                
+                hideLoadingIndicator();
+                showStatus('✅ PDFのダウンロードが完了しました', 'success');
+                
+            } catch (error) {
+                console.error('PDF生成エラー:', error);
+                hideLoadingIndicator();
+                showStatus('❌ PDF生成中にエラーが発生しました', 'error');
+            }
+        }
+        
+        // === 印刷用フォールバック ===
+        function fallbackPrintReport() {
+            const printWindow = window.open('', '_blank');
             
             // 総合レポートの内容を取得
             const reportContent = document.getElementById('report-summary');
@@ -5056,9 +5310,6 @@ ${allTexts}
                 showStatus('❌ レポートが見つかりません', 'error');
                 return;
             }
-            
-            // レポート内容を新しいウィンドウで開く（印刷用スタイル付き）
-            const printWindow = window.open('', '_blank');
             
             // 印刷用HTMLを構築
             const printHTML = `
