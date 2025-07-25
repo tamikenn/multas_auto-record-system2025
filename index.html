@@ -1684,6 +1684,80 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+
+        /* === ユーザーポップアップ === */
+        .user-popup {
+            position: absolute;
+            top: 100%;
+            right: 0;
+            margin-top: 10px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            padding: 20px;
+            min-width: 200px;
+            z-index: 1000;
+            display: none;
+            animation: popupFadeIn 0.3s ease-out;
+        }
+
+        @keyframes popupFadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .user-popup::before {
+            content: '';
+            position: absolute;
+            top: -8px;
+            right: 20px;
+            width: 0;
+            height: 0;
+            border-left: 8px solid transparent;
+            border-right: 8px solid transparent;
+            border-bottom: 8px solid white;
+        }
+
+        .user-popup-content {
+            text-align: center;
+        }
+
+        .user-popup-content p {
+            margin: 10px 0;
+            color: #666;
+            font-size: 14px;
+        }
+
+        .user-popup-content .logout-btn {
+            background: #f5f5f5;
+            color: #666;
+            border: none;
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 15px;
+        }
+
+        .user-popup-content .logout-btn:hover {
+            background: #e0e0e0;
+        }
+
+        .user-name-clickable {
+            cursor: pointer;
+            transition: opacity 0.3s;
+        }
+
+        .user-name-clickable:hover {
+            opacity: 0.8;
+        }
     </style>
 </head>
 <body>
@@ -4576,17 +4650,37 @@ ${allTexts}
                 const userInfo = document.getElementById('userInfo');
                 const devBadge = isDeveloperMode ? ' <span style="color: #ff6b6b;">[DEV]</span>' : '';
                 userInfo.innerHTML = `
-                    <span style="margin-right: 10px;">${currentUser.id}${devBadge}</span>
-                    <button onclick="confirmLogout()" style="background: #666; color: white; border: none; padding: 4px 10px; border-radius: 4px; font-size: 12px; cursor: pointer; transition: all 0.3s;" onmouseover="this.style.background='#555'" onmouseout="this.style.background='#666'">
-                        ログアウト
-                    </button>
+                    <span class="user-name-clickable" onclick="toggleUserPopup()">${currentUser.id}${devBadge}</span>
+                    <div id="userPopup" class="user-popup">
+                        <div class="user-popup-content">
+                            <p style="font-weight: bold; color: #333;">現在ログイン中です</p>
+                            <p>ユーザー: ${currentUser.id}</p>
+                            <p>レベル: ${userLevel}</p>
+                            <button class="logout-btn" onclick="confirmLogout()">ログアウト</button>
+                        </div>
+                    </div>
                 `;
                 userInfo.style.display = 'block';
+                userInfo.style.position = 'relative';
+            }
+        }
+
+        // === ユーザーポップアップ切り替え ===
+        function toggleUserPopup() {
+            const popup = document.getElementById('userPopup');
+            if (popup) {
+                popup.style.display = popup.style.display === 'block' ? 'none' : 'block';
             }
         }
         
         // === ログアウト確認 ===
         function confirmLogout() {
+            // ポップアップを閉じる
+            const userPopup = document.getElementById('userPopup');
+            if (userPopup) {
+                userPopup.style.display = 'none';
+            }
+            
             const message = `ログアウトしますか？\n\n【現在の状態】\nユーザー: ${currentUser.id}\nレベル: ${userLevel}\n総記録数: ${records.length}\n\nログアウトすると再度ログインが必要になります。\n記録データは保存されます。`;
             
             if (confirm(message)) {
@@ -4651,6 +4745,14 @@ ${allTexts}
                     document.querySelectorAll('.element-reason').forEach(el => {
                         el.style.display = 'none';
                     });
+                }
+                
+                // ユーザーポップアップの外側をクリックしたら閉じる
+                const userPopup = document.getElementById('userPopup');
+                if (userPopup && userPopup.style.display === 'block') {
+                    if (!e.target.closest('.user-popup') && !e.target.classList.contains('user-name-clickable')) {
+                        userPopup.style.display = 'none';
+                    }
                 }
             });
         }
