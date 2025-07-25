@@ -1427,11 +1427,22 @@
                 position: relative;
                 background: white;
                 padding: 12px;
-                padding-bottom: calc(80px + env(safe-area-inset-bottom)); /* Safariのツールバー分の余白 */
+                padding-bottom: 15px;
                 box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
                 flex-shrink: 0;
                 border-top: 1px solid #e0e0e0;
                 z-index: 50;
+            }
+            
+            /* Safariツールバー回避用の白いスペーサー */
+            .safari-spacer {
+                display: block;
+                position: relative;
+                background: white;
+                height: 100px; /* 約1cm相当 + 余裕 */
+                width: 100%;
+                flex-shrink: 0;
+                border: none;
             }
             
             .monitor {
@@ -1993,6 +2004,29 @@
                     </div>
                 </div>
             </div>
+            
+            <!-- LOG画面専用の入力エリア -->
+            <div class="bottom-input" id="monitor1-input">
+                <div class="input-row">
+                    <div class="experience-input" style="position: relative;">
+                        <textarea id="experienceTextInput" placeholder="実習で体験したことを記録… ※患者の個人情報は入力しない"></textarea>
+                        <button type="button" class="submit-btn" onclick="submitExperience()" title="送信">
+                            <span id="submitText">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M2 21L23 12L2 3V10L17 12L2 14V21Z" fill="white"/>
+                                </svg>
+                            </span>
+                            <span id="submitLoading" style="display: none;">
+                                <span class="loading"></span>
+                            </span>
+                        </button>
+                    </div>
+                </div>
+                <div id="statusMessage"></div>
+            </div>
+            
+            <!-- Safariツールバー回避用の白いスペーサー -->
+            <div class="safari-spacer"></div>
         </div>
 
         <!-- モニター2: 体験整理 -->
@@ -2075,43 +2109,22 @@
             </div>
         </div>
     </div>
-
-    <!-- ボトム入力フォーム -->
-    <div class="bottom-input">
-        <!-- レポート生成ボタン（REPORT画面の時のみ表示） -->
-        <div id="reportActionArea" class="report-action-area" style="display: none;">
-            <button class="btn-secondary report-generate-btn" onclick="generateDailyReport()">
-                🤖 レポート生成
-            </button>
-            <button class="btn-primary summary-report-btn" onclick="generateSummaryReport()" style="margin-top: 10px;">
-                📊 総合レポート生成
-            </button>
-            <!-- 開発用：サンプル投稿ボタン -->
-            <button class="btn-secondary sample-btn dev-only" onclick="addSampleRecords()" style="margin-top: 10px; background: #6c757d; display: none;">
-                🔧 サンプル10投稿を追加（開発用）
-            </button>
-            <button class="btn-secondary sample-btn dev-only" onclick="addLongSampleRecord()" style="margin-top: 10px; background: #495057; display: none;">
-                📝 長文サンプル投稿を追加（開発用）
-            </button>
-        </div>
-        
-        <div class="input-row">
-            <div class="experience-input" style="position: relative;">
-                <textarea id="experienceText" placeholder="実習で体験したことを記録… ※患者の個人情報は入力しない"></textarea>
-                <button type="button" class="submit-btn" onclick="submitExperience()" title="送信">
-                    <span id="submitText">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M2 21L23 12L2 3V10L17 12L2 14V21Z" fill="white"/>
-                        </svg>
-                    </span>
-                    <span id="submitLoading" style="display: none;">
-                        <span class="loading"></span>
-                    </span>
-                </button>
-            </div>
-        </div>
-
-        <div id="statusMessage"></div>
+    
+    <!-- レポート生成ボタン（REPORT画面の時のみ表示） -->
+    <div id="reportActionArea" class="report-action-area" style="display: none; position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 100; background: white; padding: 15px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+        <button class="btn-secondary report-generate-btn" onclick="generateDailyReport()">
+            🤖 レポート生成
+        </button>
+        <button class="btn-primary summary-report-btn" onclick="generateSummaryReport()" style="margin-top: 10px;">
+            📊 総合レポート生成
+        </button>
+        <!-- 開発用：サンプル投稿ボタン -->
+        <button class="btn-secondary sample-btn dev-only" onclick="addSampleRecords()" style="margin-top: 10px; background: #6c757d; display: none;">
+            🔧 サンプル10投稿を追加（開発用）
+        </button>
+        <button class="btn-secondary sample-btn dev-only" onclick="addLongSampleRecord()" style="margin-top: 10px; background: #495057; display: none;">
+            📝 長文サンプル投稿を追加（開発用）
+        </button>
     </div>
 
     <script>
@@ -2259,7 +2272,7 @@
 
         // === 体験記録送信 ===
         async function submitExperience() {
-            const experienceText = document.getElementById('experienceText').value.trim();
+            const experienceText = (document.getElementById('experienceTextInput') || document.getElementById('experienceText')).value.trim();
             
             if (!experienceText) {
                 showStatus('体験内容を入力してください。', 'error');
@@ -2411,7 +2424,12 @@
                 submitLoading.style.display = 'none';
                 
                 // フォームをクリア
-                document.getElementById('experienceText').value = '';
+                if (document.getElementById('experienceTextInput')) {
+                    document.getElementById('experienceTextInput').value = '';
+                }
+                if (document.getElementById('experienceText')) {
+                    document.getElementById('experienceText').value = '';
+                }
             }
         }
 
