@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
-    <title>MULTAs v2.2 [SAFETY MODE] - 医学実習レポート自動生成システム（安定版）</title>
-    <meta name="version" content="2.2.1">
+    <title>MULTAs v2.3 [SAFETY MODE] - 医学実習レポート自動生成システム（安定版）</title>
+    <meta name="version" content="2.3.0">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
@@ -1650,135 +1650,6 @@
             );
         }
 
-        /* === 個人情報アラート スタイル === */
-        .personal-info-alert {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 10000;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .alert-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.7);
-            backdrop-filter: blur(5px);
-        }
-
-        .alert-modal {
-            background: white;
-            border-radius: 15px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
-            max-width: 500px;
-            width: 90%;
-            max-height: 80vh;
-            overflow-y: auto;
-            position: relative;
-            z-index: 1;
-            animation: alertSlideIn 0.3s ease-out;
-        }
-
-        @keyframes alertSlideIn {
-            from {
-                opacity: 0;
-                transform: translateY(-50px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .alert-header {
-            background: linear-gradient(135deg, #ff6b6b, #ee5a24);
-            color: white;
-            padding: 20px;
-            border-radius: 15px 15px 0 0;
-            display: flex;
-            align-items: center;
-            gap: 15px;
-        }
-
-        .alert-icon {
-            font-size: 2rem;
-        }
-
-        .alert-header h3 {
-            margin: 0;
-            font-size: 1.5rem;
-        }
-
-        .alert-content {
-            padding: 25px;
-            line-height: 1.6;
-        }
-
-        .alert-content ul {
-            background: #fff3cd;
-            border: 1px solid #ffeaa7;
-            border-radius: 8px;
-            padding: 15px;
-            margin: 15px 0;
-        }
-
-        .alert-reason {
-            color: #666;
-            font-style: italic;
-            margin: 15px 0;
-        }
-
-        .alert-suggestion {
-            background: #d1ecf1;
-            border: 1px solid #bee5eb;
-            border-radius: 8px;
-            padding: 15px;
-            margin: 15px 0;
-        }
-
-        .alert-actions {
-            padding: 0 25px 25px;
-            display: flex;
-            gap: 15px;
-            justify-content: flex-end;
-        }
-
-        .alert-btn {
-            padding: 12px 25px;
-            border: none;
-            border-radius: 8px;
-            font-size: 1rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .edit-btn {
-            background: #74b9ff;
-            color: white;
-        }
-
-        .edit-btn:hover {
-            background: #0984e3;
-            transform: translateY(-2px);
-        }
-
-        .continue-btn {
-            background: #00b894;
-            color: white;
-        }
-
-        .continue-btn:hover {
-            background: #00a085;
-            transform: translateY(-2px);
-        }
 
         .loading-indicator {
             position: fixed;
@@ -1927,7 +1798,7 @@
     
     <!-- ヘッダー -->
     <div class="header">
-        <h1>MULTAs v2.2 [SAFETY MODE]</h1>
+        <h1>MULTAs v2.3 [SAFETY MODE]</h1>
         <p>Medical University Learning and Training Assessment system - 安定版</p>
         <!-- 日付選択 -->
         <div class="day-selector">
@@ -2031,7 +1902,7 @@
             <div class="bottom-input" id="monitor1-input">
                 <div class="input-row">
                     <div class="experience-input" style="position: relative;">
-                        <textarea id="experienceTextInput" placeholder="実習で体験したことを記録… ※患者の個人情報は入力しない"></textarea>
+                        <textarea id="experienceTextInput" placeholder="実習で体験したことを記録…"></textarea>
                         <button type="button" class="submit-btn" onclick="submitExperience()" title="送信">
                             <span id="submitText">
                                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -2301,19 +2172,7 @@
                 return;
             }
 
-            // 個人情報チェック実行（AI分析と同時に行う）
-            let personalInfoCheckResult = null;
-            try {
-                personalInfoCheckResult = await checkPersonalInformation(experienceText);
-                
-                if (personalInfoCheckResult.hasPersonalInfo) {
-                    // 個人情報が検出されても続行（ポップアップは表示しない）
-                    console.log('個人情報が検出されましたが、処理を続行します:', personalInfoCheckResult);
-                }
-            } catch (error) {
-                console.error('個人情報チェックでエラー:', error);
-                // エラー時は通常処理を続行
-            }
+            // 個人情報チェックは削除（処理速度向上のため）
 
             // UI状態を処理中に変更
             const submitBtn = document.querySelector('.submit-btn');
@@ -2906,65 +2765,6 @@
             }
         }
         
-        // === 個人情報チェック機能 ===
-        const PERSONAL_INFO_CHECK_PROMPT = `以下の医学実習記録テキストに、患者を特定できる個人情報が含まれているかチェックしてください。
-
-【検出対象 - 警告が必要】
-- フルネーム（田中太郎、佐藤花子、山田一郎など）
-- 生年月日（1980年3月15日、昭和55年生まれなど）
-- 住所の詳細（東京都新宿区○○町1-2-3など）
-- 電話番号（090-1234-5678など）
-
-【許容対象 - 警告不要】
-- 年齢・性別（75歳男性、60代女性など）
-- イニシャル（A.Kさん、T.S様など）
-- 医学用語の固有名詞（川崎病、菊池病、Johnson分類、Crohn病、Parkinson病など）
-- 症状や所見の記述
-- 病院内の場所（3階病棟、外来など）
-
-テキスト: "{{INPUT_TEXT}}"
-
-以下のJSON形式で回答してください：
-{
-  "hasPersonalInfo": true/false,
-  "detectedItems": ["検出された項目1", "検出された項目2"],
-  "reason": "検出理由の説明",
-  "suggestion": "修正提案（あれば）"
-}`;
-
-        /**
-         * 個人情報チェック（高速化版）
-         */
-        async function checkPersonalInformation(inputText) {
-            // 直接ルールベースチェックを実行（API呼び出しを省略して高速化）
-            return performBasicPersonalInfoCheck(inputText);
-        }
-
-        /**
-         * フォールバック：基本的なルールベースチェック
-         */
-        function performBasicPersonalInfoCheck(inputText) {
-            // 最小限のチェックのみ実行（高速化のため）
-            const detectedItems = [];
-            
-            // 明らかなフルネームパターンのみチェック
-            if (/[一-龯]{2,4}[\s　][一-龯]{2,4}[さん様氏君]/.test(inputText)) {
-                detectedItems.push('フルネームの可能性');
-            }
-            
-            // 完全な生年月日パターンのみチェック
-            if (/\d{4}年\d{1,2}月\d{1,2}日/.test(inputText)) {
-                detectedItems.push('生年月日の可能性');
-            }
-            
-            return {
-                success: true,
-                hasPersonalInfo: detectedItems.length > 0,
-                detectedItems: detectedItems,
-                reason: detectedItems.length > 0 ? 'ルールベース検出' : '問題なし',
-                suggestion: detectedItems.length > 0 ? '年齢・性別での記述をお勧めします' : ''
-            };
-        }
 
         /**
          * アラート表示機能
