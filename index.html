@@ -1258,8 +1258,9 @@
             }
 
             .monitor-tab {
-                font-size: 0.8rem;
-                padding: 10px 6px;
+                font-size: 0.7rem;
+                padding: 8px 10px;
+                min-width: 100px;
             }
 
             .monitor h3 {
@@ -1350,9 +1351,30 @@
             }
             
             .header {
-                padding: 15px;
+                padding: 10px;
                 position: static; /* 固定位置を解除 */
                 width: 100%;
+            }
+            
+            .header h1 {
+                font-size: 1.3rem;
+            }
+            
+            .header p {
+                font-size: 0.7rem;
+            }
+            
+            .monitor-tabs {
+                padding: 5px;
+                gap: 3px;
+                background: rgba(255,255,255,0.95);
+            }
+            
+            .monitor-tab {
+                padding: 6px 14px;
+                font-size: 0.7rem;
+                min-width: 90px;
+                border-radius: 18px;
             }
             
             .container {
@@ -1373,7 +1395,7 @@
             
             .monitor-content {
                 padding-bottom: 20px;
-                min-height: 200px;
+                min-height: 150px;
             }
             
             .input-area {
@@ -1420,9 +1442,14 @@
             }
             
             .user-info {
-                top: 10px;
-                right: 10px;
+                top: 5px;
+                right: 5px;
                 font-size: 11px;
+            }
+            
+            .user-name-clickable {
+                padding: 6px 12px;
+                font-size: 12px;
             }
             
             .user-info button {
