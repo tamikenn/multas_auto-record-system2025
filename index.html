@@ -1454,10 +1454,18 @@
             }
             
             /* REPORTタブのコンテンツをスクロール可能に */
+            #monitor3 {
+                display: flex;
+                flex-direction: column;
+                height: 100%;
+                overflow: hidden;
+            }
+            
             #monitor3 .monitor-content {
+                flex: 1;
                 overflow-y: auto;
                 -webkit-overflow-scrolling: touch;
-                height: 100%;
+                min-height: 0;
             }
             
             /* 他の画面用の入力エリア設定（LIST、REPORT画面では非表示） */
@@ -1978,7 +1986,7 @@
         </div>
         
         <!-- LOG画面専用の入力エリア（main-contentの外に配置） -->
-        <div class="bottom-input" id="monitor1-input" style="display: block;">
+        <div class="bottom-input" id="monitor1-input" style="display: none;">
             <div class="input-row">
                 <div class="experience-input" style="position: relative;">
                     <textarea id="experienceTextInput" placeholder="実習で体験したことを記録…"></textarea>
@@ -2310,16 +2318,10 @@
             // 選択されたモニターを表示
             document.getElementById(monitorId).classList.add('active');
             
-            // LOG入力エリアの表示/非表示制御（より厳密に）
+            // LOG入力エリアの表示/非表示制御
             const monitor1Input = document.getElementById('monitor1-input');
             if (monitor1Input) {
-                if (monitorId === 'monitor1') {
-                    monitor1Input.style.display = 'block';
-                    monitor1Input.style.visibility = 'visible';
-                } else {
-                    monitor1Input.style.display = 'none';
-                    monitor1Input.style.visibility = 'hidden';
-                }
+                monitor1Input.style.display = (monitorId === 'monitor1') ? 'block' : 'none';
             }
             
             // 対応するタブボタンをアクティブに
@@ -2348,15 +2350,8 @@
             // 各モニターの内容を更新
             if (monitorId === 'monitor1') {
                 updateRecordsList();
-                // LOG画面専用の入力エリアを表示
-                document.getElementById('monitor1-input').style.display = 'block';
             } else if (monitorId === 'monitor2') {
                 updateOrganizedView();
-                // 他の画面では入力エリアを非表示
-                document.getElementById('monitor1-input').style.display = 'none';
-            } else {
-                // その他の画面でも入力エリアを非表示
-                document.getElementById('monitor1-input').style.display = 'none';
             }
 
             currentMonitor = monitorId;
@@ -4660,6 +4655,9 @@ ${allTexts}
             // 初期経験値表示
             updateExpDisplay();
             updateAllViews();
+            
+            // 明示的にmonitor1（LOG）を初期表示
+            switchMonitor('monitor1');
             
             // Enter キーでの送信
             document.getElementById('experienceText').addEventListener('keydown', function(e) {
