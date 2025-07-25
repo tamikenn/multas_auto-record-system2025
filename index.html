@@ -169,6 +169,7 @@
             flex-direction: column;
             min-height: 0;
             overflow: hidden;
+            padding-bottom: env(safe-area-inset-bottom);
         }
 
         /* === 統計固定エリア === */
@@ -1348,8 +1349,13 @@
             body {
                 padding: 0;
                 margin: 0;
-                height: 100vh;
-                overflow: hidden;
+                min-height: 100vh;
+                min-height: -webkit-fill-available;
+                overflow-x: hidden;
+            }
+            
+            html {
+                height: -webkit-fill-available;
             }
             
             .header {
@@ -1387,10 +1393,19 @@
             }
             
             /* LOG画面専用のレイアウト */
+            .container {
+                height: 100vh;
+                height: -webkit-fill-available;
+                display: flex;
+                flex-direction: column;
+                overflow: hidden;
+            }
+            
             #monitor1 {
                 display: flex;
                 flex-direction: column;
-                height: calc(100vh - 140px); /* ヘッダーとタブを除いた高さ */
+                flex: 1;
+                overflow: hidden;
             }
             
             #monitor1 .monitor-stats {
@@ -1406,15 +1421,17 @@
                 padding-bottom: 20px;
             }
             
-            #monitor1 .input-area {
+            /* 入力エリアを一番下に配置 */
+            #monitor1 .bottom-input {
                 display: block !important;
-                position: static; /* 通常のフローに戻す */
+                position: relative;
                 background: white;
                 padding: 12px;
-                padding-bottom: calc(20px + env(safe-area-inset-bottom));
+                padding-bottom: calc(80px + env(safe-area-inset-bottom)); /* Safariのツールバー分の余白 */
                 box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
                 flex-shrink: 0;
                 border-top: 1px solid #e0e0e0;
+                z-index: 50;
             }
             
             .monitor {
@@ -1580,10 +1597,11 @@
             
             /* メインコンテンツの高さ調整 */
             .main-content {
-                height: calc(100vh - 120px);
+                flex: 1;
                 display: flex;
                 flex-direction: column;
                 position: relative;
+                overflow: hidden;
             }
         }
         
