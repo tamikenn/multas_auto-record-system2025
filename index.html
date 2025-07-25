@@ -754,9 +754,11 @@
         }
         
         .report-action-area {
-            padding: 10px 20px;
+            padding: 20px;
             text-align: center;
-            border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 10px;
+            margin: 20px auto;
         }
         
         .report-generate-btn {
@@ -1451,21 +1453,6 @@
                 border: none;
             }
             
-            /* レポート生成ボタンエリアのモバイル対応 */
-            .report-action-area {
-                bottom: 20px !important;
-                width: calc(100% - 40px);
-                left: 20px !important;
-                right: 20px !important;
-                transform: none !important;
-                max-height: 50vh;
-                overflow-y: auto;
-            }
-            
-            /* REPORTタブのコンテンツに余白を追加 */
-            #monitor3 .monitor-content {
-                padding-bottom: 250px !important;
-            }
             
             .monitor {
                 width: 100%;
@@ -1947,13 +1934,31 @@
 
         <!-- モニター3: Dailyレポート -->
         <div id="monitor3" class="monitor">
-            <div class="monitor-content" style="padding-bottom: 200px;">
+            <div class="monitor-content">
                 <!-- レーダーチャート表示エリア -->
                 <div id="radarChartContainer" class="radar-chart-container">
                     <div class="radar-chart-title">12時計分類 体験チャート</div>
                     <canvas id="radarChart"></canvas>
                     <div class="radar-legend" id="radarLegend"></div>
                 </div>
+                
+                <!-- レポート生成ボタンエリア -->
+                <div id="reportActionArea" class="report-action-area" style="margin: 20px auto; text-align: center;">
+                    <button class="btn-secondary report-generate-btn" onclick="generateDailyReport()" style="margin: 10px;">
+                        🤖 レポート生成
+                    </button>
+                    <button class="btn-primary summary-report-btn" onclick="generateSummaryReport()" style="margin: 10px;">
+                        📊 総合レポート生成
+                    </button>
+                    <!-- 開発用：サンプル投稿ボタン -->
+                    <button class="btn-secondary sample-btn dev-only" onclick="addSampleRecords()" style="margin: 10px; background: #6c757d; display: none;">
+                        🔧 サンプル10投稿を追加（開発用）
+                    </button>
+                    <button class="btn-secondary sample-btn dev-only" onclick="addLongSampleRecord()" style="margin: 10px; background: #495057; display: none;">
+                        📝 長文サンプル投稿を追加（開発用）
+                    </button>
+                </div>
+                
                 <!-- レポート表示エリア -->
                 <div id="dailyReport">
                     <div class="report-content">
@@ -2003,22 +2008,6 @@
         </div>
     </div>
     
-    <!-- レポート生成ボタン（REPORT画面の時のみ表示） -->
-    <div id="reportActionArea" class="report-action-area" style="display: none; position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 100; background: white; padding: 15px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
-        <button class="btn-secondary report-generate-btn" onclick="generateDailyReport()">
-            🤖 レポート生成
-        </button>
-        <button class="btn-primary summary-report-btn" onclick="generateSummaryReport()" style="margin-top: 10px;">
-            📊 総合レポート生成
-        </button>
-        <!-- 開発用：サンプル投稿ボタン -->
-        <button class="btn-secondary sample-btn dev-only" onclick="addSampleRecords()" style="margin-top: 10px; background: #6c757d; display: none;">
-            🔧 サンプル10投稿を追加（開発用）
-        </button>
-        <button class="btn-secondary sample-btn dev-only" onclick="addLongSampleRecord()" style="margin-top: 10px; background: #495057; display: none;">
-            📝 長文サンプル投稿を追加（開発用）
-        </button>
-    </div>
 
     <script>
         // === グローバル変数 ===
@@ -2346,16 +2335,12 @@
                 statsElement.style.display = 'block';
             }
             
-            // レポート生成ボタンの表示制御
-            const reportActionArea = document.getElementById('reportActionArea');
+            // REPORT画面の場合の処理
             if (monitorId === 'monitor3') {
-                reportActionArea.style.display = 'block';
                 // レーダーチャートを更新
                 updateRadarChart();
                 // 保存されたレポートを表示
                 displayAllReports();
-            } else {
-                reportActionArea.style.display = 'none';
             }
             
             // 各モニターの内容を更新
