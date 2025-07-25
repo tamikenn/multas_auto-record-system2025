@@ -1386,32 +1386,41 @@
             
             /* LOG画面専用のレイアウト */
             #monitor1 {
+                position: fixed;
+                top: 140px; /* ヘッダーとタブの下から開始（調整） */
+                left: 0;
+                right: 0;
+                bottom: 0;
                 display: flex;
                 flex-direction: column;
-                height: calc(100vh - 200px); /* ヘッダーとタブの高さを引く */
             }
             
             #monitor1 .monitor-stats {
                 flex-shrink: 0;
+                background: white;
+                z-index: 10;
             }
             
             #monitor1 .monitor-content {
                 flex: 1;
                 overflow-y: auto;
                 -webkit-overflow-scrolling: touch;
-                padding-bottom: 20px;
+                padding-bottom: 180px; /* 入力エリアの高さ分の余白 */
             }
             
             #monitor1 .input-area {
-                display: block !important; /* 表示を強制 */
-                position: relative; /* fixedからrelativeに変更 */
-                bottom: auto;
-                margin-top: auto;
-                flex-shrink: 0;
+                display: block !important;
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
                 background: white;
-                padding: 15px;
-                padding-bottom: calc(15px + env(safe-area-inset-bottom));
+                padding: 12px;
+                padding-bottom: calc(20px + env(safe-area-inset-bottom));
                 box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+                z-index: 100;
+                max-height: 40vh; /* 画面の40%以下に制限 */
+                overflow-y: auto;
             }
             
             .monitor {
@@ -1437,8 +1446,25 @@
             
             .btn-primary {
                 width: 100%;
-                padding: 15px;
+                padding: 12px;
                 font-size: 16px;
+                margin-top: 8px;
+            }
+            
+            #monitor1 .input-row {
+                flex-direction: row; /* 横並びを維持 */
+                gap: 8px;
+                align-items: stretch;
+            }
+            
+            #monitor1 .experience-input {
+                flex: 1;
+            }
+            
+            #monitor1 .input-row textarea {
+                height: 50px; /* 固定高さ */
+                min-height: 50px;
+                max-height: 80px;
             }
             
             .category-element {
