@@ -2087,19 +2087,44 @@
         }
         
         // === OpenAI API設定 ===
+        // APIキー管理方法の選択
+        const USE_PROXY = false; // プロキシサービスを使用する場合はtrue
+        const PROXY_URL = ''; // 独自のプロキシサーバーURL（例: Vercel Functions）
+        
         let OPENAI_API_KEY = localStorage.getItem('multasApiKey') || '';
         
         // APIキーが未設定の場合の処理
         function checkApiKey() {
-            if (!OPENAI_API_KEY) {
-                const key = prompt('OpenAI APIキーを入力してください:');
+            if (!USE_PROXY && !OPENAI_API_KEY) {
+                const message = `OpenAI APIキーを入力してください:
+
+【セキュリティに関する重要な注意】
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️ 各ユーザーは自分のAPIキーを使用してください
+⚠️ 他人のAPIキーを使用しないでください
+⚠️ 自分のAPIキーを他人と共有しないでください
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📍 APIキーの取得方法:
+1. https://platform.openai.com にアクセス
+2. API keysページで新しいキーを作成
+3. 使用量上限を設定することを推奨
+
+✅ このキーはあなたのブラウザにのみ保存されます
+✅ サーバーには送信されません
+✅ 一度入力すれば次回から自動的に使用されます`;
+                
+                const key = prompt(message);
                 if (key) {
                     OPENAI_API_KEY = key;
                     localStorage.setItem('multasApiKey', key);
+                    showStatus('APIキーを保存しました（ブラウザ内のみ）', 'success');
                 } else {
                     alert('APIキーが設定されていないため、AI分類機能は使用できません。');
+                    return false;
                 }
             }
+            return true;
         }
         
         // === 医学実習12時計分類システム ===
