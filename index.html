@@ -4187,9 +4187,30 @@ ${allTexts}
                 const userInfo = document.getElementById('userInfo');
                 const devBadge = isDeveloperMode ? ' <span style="color: #ff6b6b;">[DEV]</span>' : '';
                 userInfo.innerHTML = `
-                    ${currentUser.id}${devBadge}
+                    <span style="margin-right: 10px;">${currentUser.id}${devBadge}</span>
+                    <button onclick="confirmLogout()" style="background: #666; color: white; border: none; padding: 4px 10px; border-radius: 4px; font-size: 12px; cursor: pointer; transition: all 0.3s;" onmouseover="this.style.background='#555'" onmouseout="this.style.background='#666'">
+                        ログアウト
+                    </button>
                 `;
                 userInfo.style.display = 'block';
+            }
+        }
+        
+        // === ログアウト確認 ===
+        function confirmLogout() {
+            const message = `ログアウトしますか？\n\n【現在の状態】\nユーザー: ${currentUser.id}\nレベル: ${userLevel}\n総記録数: ${records.length}\n\nログアウトすると再度ログインが必要になります。\n記録データは保存されます。`;
+            
+            if (confirm(message)) {
+                // データを保存
+                saveGameData();
+                // 成功メッセージ
+                showStatus('ログアウトしました', 'info');
+                // ユーザー情報を削除
+                localStorage.removeItem('multasUser');
+                // 少し待ってからリロード
+                setTimeout(() => {
+                    location.reload();
+                }, 500);
             }
         }
         
