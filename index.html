@@ -62,6 +62,14 @@
             top: 15px;
             right: 20px;
         }
+        
+        /* 最小化された日付選択 */
+        .day-selector-minimal {
+            position: fixed;
+            top: 10px;
+            right: 20px;
+            z-index: 1000;
+        }
 
         .day-display {
             display: flex;
@@ -133,6 +141,7 @@
             backdrop-filter: blur(10px);
             flex-shrink: 0;
             justify-content: center;
+            margin-top: 50px; /* 日付選択の分だけ下げる */
         }
 
         .monitor-tab {
@@ -1770,7 +1779,8 @@
     <!-- ログインモーダル -->
     <div id="loginModal" class="login-modal" style="display: none;">
         <div class="login-container">
-            <div class="login-title">MULTAs ログイン</div>
+            <div class="login-title">MULTAs v2.3 [SAFETY MODE]</div>
+            <div style="font-size: 12px; color: #666; margin-bottom: 20px;">Medical University Learning and Training Assessment system</div>
             <form class="login-form" onsubmit="handleLogin(event)">
                 <input type="text" id="loginId" class="login-input" placeholder="IDネーム" required>
                 <input type="password" id="loginPassword" class="login-input" placeholder="パスワード" required>
@@ -1783,24 +1793,19 @@
     <!-- ユーザー情報表示 -->
     <div id="userInfo" class="user-info"></div>
     
-    <!-- ヘッダー -->
-    <div class="header">
-        <h1>MULTAs v2.3 [SAFETY MODE]</h1>
-        <p>Medical University Learning and Training Assessment system - 安定版</p>
-        <!-- 日付選択 -->
-        <div class="day-selector">
-            <div class="day-display" onclick="toggleDayDropdown()">
-                <span id="currentDayLabel">1日目</span>
-                <span style="font-size: 0.7em;">▼</span>
-            </div>
-            <div class="day-dropdown" id="dayDropdown">
-                <div class="day-option dev-only" onclick="selectDay('practice')" style="display: none;">練習</div>
-                <div class="day-option selected" onclick="selectDay(1)">1日</div>
-                <div class="day-option" onclick="selectDay(2)">2日</div>
-                <div class="day-option" onclick="selectDay(3)">3日</div>
-                <div class="day-option" onclick="selectDay(4)">4日</div>
-                <div class="day-option" onclick="selectDay(5)">5日</div>
-            </div>
+    <!-- 日付選択（ヘッダーなし版） -->
+    <div class="day-selector-minimal">
+        <div class="day-display" onclick="toggleDayDropdown()">
+            <span id="currentDayLabel">1日目</span>
+            <span style="font-size: 0.7em;">▼</span>
+        </div>
+        <div class="day-dropdown" id="dayDropdown">
+            <div class="day-option dev-only" onclick="selectDay('practice')" style="display: none;">練習</div>
+            <div class="day-option selected" onclick="selectDay(1)">1日</div>
+            <div class="day-option" onclick="selectDay(2)">2日</div>
+            <div class="day-option" onclick="selectDay(3)">3日</div>
+            <div class="day-option" onclick="selectDay(4)">4日</div>
+            <div class="day-option" onclick="selectDay(5)">5日</div>
         </div>
     </div>
 
