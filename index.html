@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MULTAs v2 - 医学実習レポート自動生成システム</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        /* リセットとベース */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Hiragino Sans', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        
+        /* コンテナ */
+        #app {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        /* 初期設定画面 */
+        .setup-screen {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            max-width: 500px;
+            margin: 100px auto;
+        }
+        
+        .setup-title {
+            font-size: 28px;
+            color: #667eea;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .setup-form {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .form-label {
+            font-weight: 600;
+            color: #555;
+        }
+        
+        .form-input {
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+        
+        .form-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .form-hint {
+            font-size: 12px;
+            color: #888;
+        }
+        
+        /* ヘッダー */
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 20px 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .header h1 {
+            font-size: 24px;
+            color: #667eea;
+        }
+        
+        /* ユーザー情報 */
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        
+        .user-stats {
+            display: flex;
+            gap: 15px;
+        }
+        
+        .stat-item {
+            background: #f0f4ff;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 14px;
+        }
+        
+        /* タブナビゲーション */
+        .tab-nav {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 10px;
+            border-radius: 15px;
+        }
+        
+        .tab-button {
+            padding: 12px 24px;
+            border: none;
+            background: transparent;
+            color: #666;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            border-radius: 10px;
+            transition: all 0.3s;
+        }
+        
+        .tab-button.active {
+            background: #667eea;
+            color: white;
+        }
+        
+        .tab-button:hover:not(.active) {
+            background: #f0f4ff;
+        }
+        
+        /* メインコンテンツ */
+        .main-content {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        }
+        
+        /* 入力エリア */
+        .input-section {
+            margin-bottom: 30px;
+        }
+        
+        .input-textarea {
+            width: 100%;
+            min-height: 150px;
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 16px;
+            resize: vertical;
+            transition: border-color 0.3s;
+        }
+        
+        .input-textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        /* ボタン */
+        .button {
+            padding: 12px 30px;
+            border: none;
+            border-radius: 25px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .button-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .button-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .button-secondary {
+            background: #f0f4ff;
+            color: #667eea;
+        }
+        
+        .button-secondary:hover {
+            background: #e0e8ff;
+        }
+        
+        /* カテゴリグリッド */
+        .category-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        
+        .category-card {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: transform 0.2s;
+        }
+        
+        .category-card:hover {
+            transform: translateY(-2px);
+        }
+        
+        .category-icon {
+            font-size: 24px;
+        }
+        
+        .category-info {
+            flex: 1;
+        }
+        
+        .category-name {
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .category-description {
+            font-size: 12px;
+            color: #666;
+            margin-top: 2px;
+        }
+        
+        /* レコードリスト */
+        .record-list {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        
+        .record-item {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .record-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 10px;
+        }
+        
+        .record-category {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 600;
+        }
+        
+        .record-time {
+            color: #888;
+            font-size: 14px;
+        }
+        
+        .record-text {
+            color: #555;
+            line-height: 1.6;
+        }
+        
+        .record-ai-analysis {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #e0e0e0;
+            font-size: 14px;
+            color: #666;
+        }
+        
+        /* レーダーチャート */
+        .chart-container {
+            max-width: 400px;
+            margin: 30px auto;
+        }
+        
+        /* 通知 */
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: white;
+            padding: 15px 20px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+            animation: slideIn 0.3s ease-out;
+            z-index: 1000;
+        }
+        
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        
+        .notification-success {
+            border-left: 4px solid #4caf50;
+        }
+        
+        .notification-error {
+            border-left: 4px solid #f44336;
+        }
+        
+        /* レスポンシブ */
+        @media (max-width: 768px) {
+            .header {
+                flex-direction: column;
+                gap: 15px;
+            }
+            
+            .tab-nav {
+                flex-wrap: wrap;
+            }
+            
+            .category-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        /* 非表示 */
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- 初期設定画面 -->
+        <div id="setupScreen" class="setup-screen">
+            <h1 class="setup-title">MULTAs v2 セットアップ</h1>
+            <form class="setup-form" onsubmit="handleSetup(event)">
+                <div class="form-group">
+                    <label class="form-label">ユーザー名</label>
+                    <input type="text" id="userName" class="form-input" required placeholder="例: 田中太郎">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">OpenAI APIキー</label>
+                    <input type="password" id="apiKey" class="form-input" required placeholder="sk-...">
+                    <span class="form-hint">APIキーは<a href="https://platform.openai.com/api-keys" target="_blank">OpenAIのダッシュボード</a>から取得できます</span>
+                </div>
+                
+                <button type="submit" class="button button-primary">開始する</button>
+            </form>
+        </div>
+        
+        <!-- メインアプリ -->
+        <div id="mainApp" class="hidden">
+            <!-- ヘッダー -->
+            <div class="header">
+                <h1>MULTAs v2 - 医学実習レポート自動生成システム</h1>
+                <div class="user-info">
+                    <div class="user-stats">
+                        <div class="stat-item">👤 <span id="displayUserName">-</span></div>
+                        <div class="stat-item">Lv.<span id="userLevel">1</span></div>
+                        <div class="stat-item">EXP: <span id="userExp">0</span></div>
+                        <div class="stat-item">投稿: <span id="totalPosts">0</span></div>
+                    </div>
+                    <button class="button button-secondary" onclick="logout()">ログアウト</button>
+                </div>
+            </div>
+            
+            <!-- タブナビゲーション -->
+            <div class="tab-nav">
+                <button class="tab-button active" onclick="switchTab('input')">📝 記録入力</button>
+                <button class="tab-button" onclick="switchTab('list')">📋 記録一覧</button>
+                <button class="tab-button" onclick="switchTab('report')">📊 レポート</button>
+            </div>
+            
+            <!-- メインコンテンツ -->
+            <div class="main-content">
+                <!-- 入力タブ -->
+                <div id="inputTab" class="tab-content">
+                    <div class="input-section">
+                        <h2>今日の学びを記録しよう</h2>
+                        <textarea id="recordInput" class="input-textarea" placeholder="今日の実習で学んだこと、経験したことを自由に書いてください..."></textarea>
+                        <div style="margin-top: 15px; display: flex; gap: 10px;">
+                            <button class="button button-primary" onclick="submitRecord()">📤 記録を送信</button>
+                            <button class="button button-secondary" onclick="clearInput()">クリア</button>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <h3>12時計カテゴリ</h3>
+                        <div class="category-grid" id="categoryGrid"></div>
+                    </div>
+                </div>
+                
+                <!-- 一覧タブ -->
+                <div id="listTab" class="tab-content hidden">
+                    <h2>記録一覧</h2>
+                    <div id="recordList" class="record-list"></div>
+                </div>
+                
+                <!-- レポートタブ -->
+                <div id="reportTab" class="tab-content hidden">
+                    <h2>学習レポート</h2>
+                    <div class="chart-container">
+                        <canvas id="radarChart"></canvas>
+                    </div>
+                    <div id="reportContent"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // グローバル変数
+        let currentUser = null;
+        let OPENAI_API_KEY = null;
+        let records = [];
+        let currentTab = 'input';
+        
+        // カテゴリ定義
+        const CATEGORIES = {
+            0: { 
+                name: "分類不能", 
+                icon: "❓", 
+                color: "#888888",
+                vector: {x: 0, y: 0},
+                description: "医学実習との関連が不明確"
+            },
+            1: { 
+                name: "医療倫理", 
+                icon: "⚖️", 
+                color: "#B8B8D1",
+                vector: {x: -0.3, y: -0.5},
+                description: "倫理、法律、規範、インフォームドコンセント"
+            },
+            2: { 
+                name: "地域医療", 
+                icon: "🏘️", 
+                color: "#C7CEEA",
+                vector: {x: -0.5, y: 0.8},
+                description: "訪問診療、在宅医療、地域特性"
+            },
+            3: { 
+                name: "医学知識", 
+                icon: "📚", 
+                color: "#45B7D1",
+                vector: {x: 0.8, y: -0.5},
+                description: "疾患、症候、薬理、評価尺度、治療法の理論"
+            },
+            4: { 
+                name: "診察・手技", 
+                icon: "🩺", 
+                color: "#FD9644",
+                vector: {x: 0.9, y: -0.7},
+                description: "問診、身体診察、検査手技、情報収集"
+            },
+            5: { 
+                name: "患者に対する問題解決能力", 
+                icon: "🤝", 
+                color: "#A8E6CF",
+                vector: {x: 0.5, y: -0.9},
+                description: "アセスメント、治療方針決定、系統的アプローチ"
+            },
+            6: { 
+                name: "統合的臨床", 
+                icon: "🏥", 
+                color: "#DDA0DD",
+                vector: {x: 0, y: -0.8},
+                description: "臨床に関する複数の要素を統合的に考察"
+            },
+            7: { 
+                name: "多職種連携", 
+                icon: "👥", 
+                color: "#98D8C8",
+                vector: {x: -0.5, y: -0.7},
+                description: "チーム医療、院内連携"
+            },
+            8: { 
+                name: "コミュニケーション", 
+                icon: "💬", 
+                color: "#FFD93D",
+                vector: {x: -0.8, y: -0.3},
+                description: "傾聴、共感、説明、信頼関係構築"
+            },
+            9: { 
+                name: "一般教養", 
+                icon: "📖", 
+                color: "#95E1D3",
+                vector: {x: -0.9, y: 0.3},
+                description: "医学以外の知識"
+            },
+            10: { 
+                name: "保健・福祉", 
+                icon: "🏛️", 
+                color: "#FAB1A0",
+                vector: {x: -0.3, y: 0.9},
+                description: "社会的サポート、福祉制度、介護"
+            },
+            11: { 
+                name: "行政", 
+                icon: "🏢", 
+                color: "#FF6B6B",
+                vector: {x: -0.7, y: 0.7},
+                description: "病院間連携、紹介"
+            },
+            12: { 
+                name: "社会医学/公衆衛生", 
+                icon: "🌍", 
+                color: "#4ECDC4",
+                vector: {x: 0, y: 0.9},
+                description: "病院外の事項に関する複数要素の統合"
+            }
+        };
+        
+        // 初期化
+        window.onload = function() {
+            // ローカルストレージから復元
+            const savedUser = localStorage.getItem('multas_user');
+            const savedApiKey = localStorage.getItem('multas_api_key');
+            const savedRecords = localStorage.getItem('multas_records');
+            
+            if (savedUser && savedApiKey) {
+                currentUser = JSON.parse(savedUser);
+                OPENAI_API_KEY = savedApiKey;
+                records = savedRecords ? JSON.parse(savedRecords) : [];
+                showMainApp();
+            }
+            
+            renderCategories();
+        };
+        
+        // セットアップ処理
+        function handleSetup(event) {
+            event.preventDefault();
+            
+            const userName = document.getElementById('userName').value.trim();
+            const apiKey = document.getElementById('apiKey').value.trim();
+            
+            if (!userName || !apiKey) {
+                showNotification('すべての項目を入力してください', 'error');
+                return;
+            }
+            
+            // ユーザー情報を保存
+            currentUser = {
+                name: userName,
+                level: 1,
+                exp: 0,
+                totalPosts: 0,
+                createdAt: new Date().toISOString()
+            };
+            
+            OPENAI_API_KEY = apiKey;
+            
+            // ローカルストレージに保存
+            localStorage.setItem('multas_user', JSON.stringify(currentUser));
+            localStorage.setItem('multas_api_key', apiKey);
+            
+            showMainApp();
+        }
+        
+        // メインアプリを表示
+        function showMainApp() {
+            document.getElementById('setupScreen').classList.add('hidden');
+            document.getElementById('mainApp').classList.remove('hidden');
+            
+            // ユーザー情報を表示
+            updateUserDisplay();
+            
+            // 記録を表示
+            renderRecords();
+            updateReport();
+        }
+        
+        // ユーザー情報を更新
+        function updateUserDisplay() {
+            document.getElementById('displayUserName').textContent = currentUser.name;
+            document.getElementById('userLevel').textContent = currentUser.level;
+            document.getElementById('userExp').textContent = currentUser.exp;
+            document.getElementById('totalPosts').textContent = currentUser.totalPosts;
+        }
+        
+        // タブ切り替え
+        function switchTab(tabName) {
+            currentTab = tabName;
+            
+            // タブボタンの状態を更新
+            document.querySelectorAll('.tab-button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            // タブコンテンツの表示を切り替え
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.add('hidden');
+            });
+            document.getElementById(tabName + 'Tab').classList.remove('hidden');
+            
+            // レポートタブの場合はチャートを更新
+            if (tabName === 'report') {
+                updateReport();
+            }
+        }
+        
+        // カテゴリ一覧を表示
+        function renderCategories() {
+            const grid = document.getElementById('categoryGrid');
+            grid.innerHTML = '';
+            
+            Object.entries(CATEGORIES).forEach(([id, category]) => {
+                if (id === '0') return; // 分類不能は表示しない
+                
+                const card = document.createElement('div');
+                card.className = 'category-card';
+                card.style.borderLeft = `4px solid ${category.color}`;
+                card.innerHTML = `
+                    <span class="category-icon">${category.icon}</span>
+                    <div class="category-info">
+                        <div class="category-name">${id}時: ${category.name}</div>
+                        <div class="category-description">${category.description}</div>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+        
+        // 記録を送信
+        async function submitRecord() {
+            const input = document.getElementById('recordInput');
+            const text = input.value.trim();
+            
+            if (!text) {
+                showNotification('記録内容を入力してください', 'error');
+                return;
+            }
+            
+            try {
+                // AI分析
+                const analysis = await analyzeWithAI(text);
+                
+                // 記録を作成
+                const record = {
+                    id: Date.now(),
+                    text: text,
+                    category: analysis.category,
+                    categoryName: CATEGORIES[analysis.category].name,
+                    depth: analysis.depth,
+                    vectorX: analysis.vector_x,
+                    vectorY: analysis.vector_y,
+                    aiReason: analysis.ai_reason,
+                    createdAt: new Date().toISOString()
+                };
+                
+                // 記録を保存
+                records.push(record);
+                localStorage.setItem('multas_records', JSON.stringify(records));
+                
+                // 経験値を更新
+                currentUser.exp += 10;
+                currentUser.totalPosts += 1;
+                
+                // レベルアップチェック
+                const newLevel = Math.floor(currentUser.exp / 100) + 1;
+                if (newLevel > currentUser.level) {
+                    currentUser.level = newLevel;
+                    showNotification(`🎉 レベルアップ！ Lv.${newLevel}`, 'success');
+                }
+                
+                localStorage.setItem('multas_user', JSON.stringify(currentUser));
+                updateUserDisplay();
+                
+                // UIを更新
+                input.value = '';
+                renderRecords();
+                showNotification('記録を保存しました！ +10 EXP', 'success');
+                
+            } catch (error) {
+                showNotification('エラーが発生しました: ' + error.message, 'error');
+            }
+        }
+        
+        // AI分析
+        async function analyzeWithAI(text) {
+            const prompt = `医学生の実習記録を分析し、以下の13のカテゴリーのいずれかに分類してください。
+
+記録: "${text}"
+
+カテゴリー（時計の位置で表現）:
+0時: 分類不能 - 医学実習との関連が不明確、意図が読み取れない
+1時: 医療倫理 - 倫理、法律、規範、インフォームドコンセント
+2時: 地域医療 - 訪問診療、在宅医療、地域特性
+3時: 医学知識 - 疾患、症候、薬理、評価尺度、治療法の理論
+4時: 診察・手技 - 問診、身体診察、検査手技、情報収集
+5時: 患者に対する問題解決能力 - アセスメント、治療方針決定、系統的アプローチ
+6時: 統合的臨床 - 臨床に関する複数の他分類要素を含み、統合的に考察されている内容
+7時: 多職種連携 - チーム医療、院内連携
+8時: コミュニケーション - 傾聴、共感、説明、信頼関係構築
+9時: 一般教養 - 医学以外の知識
+10時: 保健・福祉 - 社会的サポート、福祉制度、介護
+11時: 行政 - 病院間連携、紹介
+12時: 社会医学/公衆衛生 - 病院外の事項に関する複数の他分類要素を含み、統合的に考察されている内容
+
+また、学習の深さを0-4で評価し、4象限マトリクス用の座標（x: -1〜1, y: -1〜1）を決定してください。
+
+深度（0-4）:
+0: 知らない
+1: 知っている（名称レベル）
+2: 理解している（背景・因果関係）
+3: 説明できる（再現性は低い）
+4: 定着している（統合的レベル）
+
+座標:
+- x軸: non-technical skill（-1）から technical skill（1）
+- y軸: 臨床/ベッドサイド（-1）から 地域・社会（1）
+
+以下のJSON形式で回答してください：
+{
+  "category": 0-12の数値,
+  "category_name": "カテゴリ名",
+  "depth": 0-4の数値,
+  "vector_x": -1から1の数値,
+  "vector_y": -1から1の数値,
+  "ai_reason": "分類の理由"
+}`;
+
+            const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${OPENAI_API_KEY}`
+                },
+                body: JSON.stringify({
+                    model: 'gpt-3.5-turbo',
+                    messages: [{
+                        role: 'user',
+                        content: prompt
+                    }],
+                    temperature: 0.3,
+                    response_format: { type: "json_object" }
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error('AI分析に失敗しました');
+            }
+            
+            const data = await response.json();
+            return JSON.parse(data.choices[0].message.content);
+        }
+        
+        // 記録一覧を表示
+        function renderRecords() {
+            const listContainer = document.getElementById('recordList');
+            listContainer.innerHTML = '';
+            
+            if (records.length === 0) {
+                listContainer.innerHTML = '<p style="text-align: center; color: #888;">まだ記録がありません</p>';
+                return;
+            }
+            
+            // 新しい順に表示
+            [...records].reverse().forEach(record => {
+                const item = document.createElement('div');
+                item.className = 'record-item';
+                item.style.borderLeftColor = CATEGORIES[record.category].color;
+                
+                const date = new Date(record.createdAt);
+                const timeStr = date.toLocaleString('ja-JP');
+                
+                item.innerHTML = `
+                    <div class="record-header">
+                        <div class="record-category">
+                            <span>${CATEGORIES[record.category].icon}</span>
+                            <span>${record.category}時: ${record.categoryName}</span>
+                        </div>
+                        <div class="record-time">${timeStr}</div>
+                    </div>
+                    <div class="record-text">${record.text}</div>
+                    <div class="record-ai-analysis">
+                        <strong>AI分析:</strong> ${record.aiReason}<br>
+                        <strong>深さ:</strong> ${'⭐'.repeat(record.depth + 1)} (${record.depth}/4)
+                    </div>
+                `;
+                
+                listContainer.appendChild(item);
+            });
+        }
+        
+        // レポートを更新
+        function updateReport() {
+            if (records.length === 0) {
+                document.getElementById('reportContent').innerHTML = '<p style="text-align: center; color: #888;">記録を追加するとレポートが表示されます</p>';
+                return;
+            }
+            
+            // カテゴリ別の集計
+            const categoryCount = {};
+            Object.keys(CATEGORIES).forEach(id => {
+                if (id !== '0') {
+                    categoryCount[id] = records.filter(r => r.category == id).length;
+                }
+            });
+            
+            // レーダーチャートを描画
+            drawRadarChart(categoryCount);
+            
+            // レポート内容を生成
+            generateReportContent(categoryCount);
+        }
+        
+        // レーダーチャートを描画
+        function drawRadarChart(categoryCount) {
+            const ctx = document.getElementById('radarChart').getContext('2d');
+            
+            // 既存のチャートがあれば破棄
+            if (window.radarChartInstance) {
+                window.radarChartInstance.destroy();
+            }
+            
+            const labels = [];
+            const data = [];
+            
+            Object.entries(categoryCount).forEach(([id, count]) => {
+                labels.push(`${id}時: ${CATEGORIES[id].name}`);
+                data.push(count);
+            });
+            
+            window.radarChartInstance = new Chart(ctx, {
+                type: 'radar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: '記録数',
+                        data: data,
+                        fill: true,
+                        backgroundColor: 'rgba(102, 126, 234, 0.2)',
+                        borderColor: 'rgb(102, 126, 234)',
+                        pointBackgroundColor: 'rgb(102, 126, 234)',
+                        pointBorderColor: '#fff',
+                        pointHoverBackgroundColor: '#fff',
+                        pointHoverBorderColor: 'rgb(102, 126, 234)'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    scales: {
+                        r: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    }
+                }
+            });
+        }
+        
+        // レポート内容を生成
+        function generateReportContent(categoryCount) {
+            const content = document.getElementById('reportContent');
+            
+            // 統計情報
+            const totalRecords = records.length;
+            const avgDepth = records.reduce((sum, r) => sum + r.depth, 0) / totalRecords;
+            const mostFrequentCategory = Object.entries(categoryCount)
+                .sort((a, b) => b[1] - a[1])[0];
+            
+            content.innerHTML = `
+                <div style="margin-top: 30px;">
+                    <h3>学習統計</h3>
+                    <ul style="line-height: 2;">
+                        <li>総記録数: ${totalRecords}件</li>
+                        <li>平均学習深度: ${avgDepth.toFixed(1)}/4</li>
+                        <li>最も多いカテゴリ: ${CATEGORIES[mostFrequentCategory[0]].icon} ${CATEGORIES[mostFrequentCategory[0]].name} (${mostFrequentCategory[1]}件)</li>
+                    </ul>
+                    
+                    <h3 style="margin-top: 20px;">カテゴリ別記録数</h3>
+                    <div style="display: grid; gap: 10px;">
+                        ${Object.entries(categoryCount)
+                            .sort((a, b) => b[1] - a[1])
+                            .map(([id, count]) => `
+                                <div style="display: flex; align-items: center; gap: 10px; padding: 10px; background: #f8f9fa; border-radius: 8px;">
+                                    <span>${CATEGORIES[id].icon}</span>
+                                    <span style="flex: 1;">${id}時: ${CATEGORIES[id].name}</span>
+                                    <span style="font-weight: bold;">${count}件</span>
+                                </div>
+                            `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+        
+        // 入力をクリア
+        function clearInput() {
+            document.getElementById('recordInput').value = '';
+        }
+        
+        // ログアウト
+        function logout() {
+            if (confirm('ログアウトしますか？データは保存されています。')) {
+                document.getElementById('setupScreen').classList.remove('hidden');
+                document.getElementById('mainApp').classList.add('hidden');
+                document.getElementById('userName').value = '';
+                document.getElementById('apiKey').value = '';
+            }
+        }
+        
+        // 通知を表示
+        function showNotification(message, type = 'success') {
+            const notification = document.createElement('div');
+            notification.className = `notification notification-${type}`;
+            notification.textContent = message;
+            
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.remove();
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
