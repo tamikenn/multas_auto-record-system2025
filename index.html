@@ -2076,20 +2076,45 @@
             
             // レベルアップチェック（100Expでレベルアップ）
             if (userExp >= 100) {
+                // まず100%まで表示を更新
+                const expBars = [
+                    document.getElementById('expBar'),
+                    document.getElementById('expBar2'),
+                    document.getElementById('expBar3')
+                ];
+                const expTexts = [
+                    document.getElementById('expText'),
+                    document.getElementById('expText2'),
+                    document.getElementById('expText3')
+                ];
+                
+                expBars.forEach(bar => {
+                    if (bar) bar.style.width = '100%';
+                });
+                expTexts.forEach(text => {
+                    if (text) text.textContent = 'EXP: 100 / 100';
+                });
+                
+                // 100%になったことを見せる
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
                 if (userLevel === 1) {
                     // レベル1→2の特別演出
                     await showExpBarGlow();
                     await new Promise(resolve => setTimeout(resolve, 500));
                 }
                 
-                // ディゾルブ演出してから余剰分を繰り越し
-                await dissolveExpBar();
-                userExp = userExp - 100;  // 100を超えた分を次のレベルに繰り越す
+                // レベルアップ処理
+                const overflowExp = userExp - 100;  // 100を超えた分を記憶
                 userLevel++;
-                // バーを即座に0%に設定（アニメーションなし）
-                setExpBarInstant(0);
-                updateExpDisplay(); // レベル表示を更新
                 showLevelUpAnimation();
+                
+                // ディゾルブ演出
+                await dissolveExpBar();
+                
+                // 余剰分を繰り越し
+                userExp = overflowExp;
+                updateExpDisplay(); // 新しいレベルとEXPを表示
             }
             
             // データを保存
@@ -2221,15 +2246,68 @@
             showStatus(`🎁 ${message}`, 'success');
             
             for (let i = 0; i < levels; i++) {
-                // EXPバーをアニメーションで満タンにする
-                await animateExpBar();
+                // 現在のEXPから100%までアニメーション
+                const currentPercent = userExp;
+                const animationDuration = 800; // 0.8秒で100%まで
+                const startTime = Date.now();
+                
+                // EXPバーを100%までアニメーション
+                await new Promise(resolve => {
+                    const expBars = [
+                        document.getElementById('expBar'),
+                        document.getElementById('expBar2'),
+                        document.getElementById('expBar3')
+                    ];
+                    const expTexts = [
+                        document.getElementById('expText'),
+                        document.getElementById('expText2'),
+                        document.getElementById('expText3')
+                    ];
+                    
+                    const animate = () => {
+                        const elapsed = Date.now() - startTime;
+                        const progress = Math.min(elapsed / animationDuration, 1);
+                        
+                        // イージング関数（ease-out）
+                        const easeOut = 1 - Math.pow(1 - progress, 3);
+                        const newPercent = currentPercent + (100 - currentPercent) * easeOut;
+                        
+                        // EXPバーを更新
+                        expBars.forEach(bar => {
+                            if (bar) bar.style.width = newPercent + '%';
+                        });
+                        expTexts.forEach(text => {
+                            if (text) text.textContent = `EXP: ${Math.floor(newPercent)} / 100`;
+                        });
+                        
+                        if (progress < 1) {
+                            requestAnimationFrame(animate);
+                        } else {
+                            // 100%に達したことを確実にする
+                            expBars.forEach(bar => {
+                                if (bar) bar.style.width = '100%';
+                            });
+                            expTexts.forEach(text => {
+                                if (text) text.textContent = 'EXP: 100 / 100';
+                            });
+                            resolve();
+                        }
+                    };
+                    animate();
+                });
+                
+                // 100%で少し待機（満タンを見せる）
+                await new Promise(resolve => setTimeout(resolve, 300));
                 
                 // レベルアップ
                 userLevel++;
                 userExp = 0;
                 
-                // アニメーション表示（即座に実行）
+                // レベルアップアニメーション
                 showLevelUpAnimation();
+                
+                // EXPバーを0にリセット（ディゾルブ演出）
+                await dissolveExpBar();
                 
                 // 表示更新
                 updateExpDisplay();
