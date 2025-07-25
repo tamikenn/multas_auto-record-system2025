@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
-    <title>MULTAs v2.3 [SAFETY MODE] - 医学実習レポート自動生成システム（安定版）</title>
-    <meta name="version" content="2.3.0">
+    <title>MULTAs v2.3.1 [SAFETY MODE] - 医学実習レポート自動生成システム（安定版）</title>
+    <meta name="version" content="2.3.1">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
@@ -34,27 +34,7 @@
             left: 0;
         }
 
-        /* === ヘッダー === */
-        .header {
-            background: rgba(255,255,255,0.1);
-            backdrop-filter: blur(10px);
-            padding: 15px 20px;
-            text-align: center;
-            color: white;
-            flex-shrink: 0;
-            position: relative;
-        }
-
-        .header h1 {
-            font-size: 1.8rem;
-            margin-bottom: 5px;
-            text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
-        }
-
-        .header p {
-            font-size: 0.85rem;
-            opacity: 0.9;
-        }
+        /* ヘッダーは削除済み */
 
         /* === 日付選択 === */
         .day-selector {
@@ -213,6 +193,11 @@
 
         .monitor.active {
             display: flex;
+        }
+        
+        /* 非アクティブなモニター内の入力エリアは完全非表示 */
+        .monitor:not(.active) .bottom-input {
+            display: none !important;
         }
 
         .monitor h3 {
@@ -799,8 +784,11 @@
             padding: 15px 20px 20px;
             flex-shrink: 0;
             box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
-            position: relative;
-            z-index: 10;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
         }
 
         .input-row {
@@ -1107,6 +1095,8 @@
             display: block !important;
             position: relative;
             z-index: 1;
+            /* スクロール可能にする */
+            position: static;
         }
         
         #radarChart {
@@ -1375,19 +1365,7 @@
                 height: -webkit-fill-available;
             }
             
-            .header {
-                padding: 10px;
-                position: static; /* 固定位置を解除 */
-                width: 100%;
-            }
-            
-            .header h1 {
-                font-size: 1.3rem;
-            }
-            
-            .header p {
-                font-size: 0.7rem;
-            }
+            /* ヘッダー関連CSS完全削除 */
             
             .monitor-tabs {
                 padding: 5px;
@@ -1435,7 +1413,7 @@
                 flex: 1;
                 overflow-y: auto;
                 -webkit-overflow-scrolling: touch;
-                padding-bottom: 20px;
+                padding-bottom: 150px; /* 入力エリアのスペース確保 */
             }
             
             /* 入力エリアを一番下に配置 */
@@ -1473,6 +1451,13 @@
             .monitor-content {
                 padding-bottom: 20px;
                 min-height: 150px;
+            }
+            
+            /* REPORTタブのコンテンツをスクロール可能に */
+            #monitor3 .monitor-content {
+                overflow-y: auto;
+                -webkit-overflow-scrolling: touch;
+                height: 100%;
             }
             
             /* 他の画面用の入力エリア設定（LIST、REPORT画面では非表示） */
@@ -1890,26 +1875,6 @@
                 </div>
             </div>
             
-            <!-- LOG画面専用の入力エリア -->
-            <div class="bottom-input" id="monitor1-input">
-                <div class="input-row">
-                    <div class="experience-input" style="position: relative;">
-                        <textarea id="experienceTextInput" placeholder="実習で体験したことを記録…"></textarea>
-                        <button type="button" class="submit-btn" onclick="submitExperience()" title="送信">
-                            <span id="submitText">
-                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                    <path d="M2 21L23 12L2 3V10L17 12L2 14V21Z" fill="white"/>
-                                </svg>
-                            </span>
-                            <span id="submitLoading" style="display: none;">
-                                <span class="loading"></span>
-                            </span>
-                        </button>
-                    </div>
-                </div>
-                <div id="statusMessage"></div>
-            </div>
-            
             <!-- Safariツールバー回避用の白いスペーサー -->
             <div class="safari-spacer"></div>
         </div>
@@ -2010,6 +1975,26 @@
                     </div>
                 </div>
             </div>
+        </div>
+        
+        <!-- LOG画面専用の入力エリア（main-contentの外に配置） -->
+        <div class="bottom-input" id="monitor1-input" style="display: block;">
+            <div class="input-row">
+                <div class="experience-input" style="position: relative;">
+                    <textarea id="experienceTextInput" placeholder="実習で体験したことを記録…"></textarea>
+                    <button type="button" class="submit-btn" onclick="submitExperience()" title="送信">
+                        <span id="submitText">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M2 21L23 12L2 3V10L17 12L2 14V21Z" fill="white"/>
+                            </svg>
+                        </span>
+                        <span id="submitLoading" style="display: none;">
+                            <span class="loading"></span>
+                        </span>
+                    </button>
+                </div>
+            </div>
+            <div id="statusMessage"></div>
         </div>
     </div>
     
@@ -2325,6 +2310,18 @@
             // 選択されたモニターを表示
             document.getElementById(monitorId).classList.add('active');
             
+            // LOG入力エリアの表示/非表示制御（より厳密に）
+            const monitor1Input = document.getElementById('monitor1-input');
+            if (monitor1Input) {
+                if (monitorId === 'monitor1') {
+                    monitor1Input.style.display = 'block';
+                    monitor1Input.style.visibility = 'visible';
+                } else {
+                    monitor1Input.style.display = 'none';
+                    monitor1Input.style.visibility = 'hidden';
+                }
+            }
+            
             // 対応するタブボタンをアクティブに
             const tabIndex = monitorId === 'monitor1' ? 0 : 
                            monitorId === 'monitor2' ? 1 : 
@@ -2351,8 +2348,15 @@
             // 各モニターの内容を更新
             if (monitorId === 'monitor1') {
                 updateRecordsList();
+                // LOG画面専用の入力エリアを表示
+                document.getElementById('monitor1-input').style.display = 'block';
             } else if (monitorId === 'monitor2') {
                 updateOrganizedView();
+                // 他の画面では入力エリアを非表示
+                document.getElementById('monitor1-input').style.display = 'none';
+            } else {
+                // その他の画面でも入力エリアを非表示
+                document.getElementById('monitor1-input').style.display = 'none';
             }
 
             currentMonitor = monitorId;
