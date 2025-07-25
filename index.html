@@ -1539,7 +1539,7 @@
                 <span style="font-size: 0.7em;">▼</span>
             </div>
             <div class="day-dropdown" id="dayDropdown">
-                <div class="day-option" onclick="selectDay('practice')">練習</div>
+                <div class="day-option dev-only" onclick="selectDay('practice')" style="display: none;">練習</div>
                 <div class="day-option selected" onclick="selectDay(1)">1日</div>
                 <div class="day-option" onclick="selectDay(2)">2日</div>
                 <div class="day-option" onclick="selectDay(3)">3日</div>
@@ -1720,10 +1720,10 @@
                 📊 総合レポート生成
             </button>
             <!-- 開発用：サンプル投稿ボタン -->
-            <button class="btn-secondary sample-btn" onclick="addSampleRecords()" style="margin-top: 10px; background: #6c757d;">
+            <button class="btn-secondary sample-btn dev-only" onclick="addSampleRecords()" style="margin-top: 10px; background: #6c757d; display: none;">
                 🔧 サンプル10投稿を追加（開発用）
             </button>
-            <button class="btn-secondary sample-btn" onclick="addLongSampleRecord()" style="margin-top: 10px; background: #495057;">
+            <button class="btn-secondary sample-btn dev-only" onclick="addLongSampleRecord()" style="margin-top: 10px; background: #495057; display: none;">
                 📝 長文サンプル投稿を追加（開発用）
             </button>
         </div>
@@ -1826,6 +1826,7 @@
         let categoryPointsByDay = {}; // 日付別カテゴリポイント
         let summaryReportHtml = null; // 総合レポートのHTMLを保存
         let currentUser = null; // ログインユーザー情報
+        let isDeveloperMode = false; // 開発者モードフラグ
         
         // 各日付のカテゴリポイントを初期化
         const dayKeys = ['practice', '1', '2', '3', '4', '5'];
@@ -4109,10 +4110,14 @@ ${allTexts}
             
             // 簡易的な認証（実際の実装では適切な認証を行う）
             if (id && password) {
+                // 開発者モードチェック
+                isDeveloperMode = (id === 'dev' || id === 'developer' || id === 'admin');
+                
                 // ユーザー情報を保存
                 currentUser = {
                     id: id,
-                    loginTime: new Date()
+                    loginTime: new Date(),
+                    isDeveloper: isDeveloperMode
                 };
                 localStorage.setItem('multasUser', JSON.stringify(currentUser));
                 
@@ -4122,6 +4127,9 @@ ${allTexts}
                 // ユーザー情報を表示
                 showUserInfo();
                 
+                // 開発者モードUI更新
+                updateDeveloperUI();
+                
                 // 初期化処理を続行
                 initializeApp();
             } else {
@@ -4129,12 +4137,40 @@ ${allTexts}
             }
         }
         
+        // === 開発者モードUI更新 ===
+        function updateDeveloperUI() {
+            const devElements = document.querySelectorAll('.dev-only');
+            devElements.forEach(el => {
+                // ボタンとドロップダウンオプションで表示方法を変える
+                if (el.classList.contains('btn-secondary')) {
+                    el.style.display = isDeveloperMode ? 'block' : 'none';
+                } else if (el.classList.contains('day-option')) {
+                    el.style.display = isDeveloperMode ? 'block' : 'none';
+                } else {
+                    el.style.display = isDeveloperMode ? 'block' : 'none';
+                }
+            });
+            
+            // 開発者モードの場合、コンソールにメッセージ表示
+            if (isDeveloperMode) {
+                console.log('🔧 開発者モードが有効です');
+                console.log('利用可能なショートカット:');
+                console.log('- Ctrl+Shift+S: サンプル10投稿を追加');
+                console.log('- Ctrl+Shift+L: 長文サンプル投稿を追加');
+                console.log('- Ctrl+Shift+X: ログアウト');
+                console.log('利用可能な機能:');
+                console.log('- 練習用日付選択');
+                console.log('- サンプル投稿ボタン');
+            }
+        }
+        
         // === ユーザー情報表示 ===
         function showUserInfo() {
             if (currentUser) {
                 const userInfo = document.getElementById('userInfo');
+                const devBadge = isDeveloperMode ? ' <span style="color: #ff6b6b;">[DEV]</span>' : '';
                 userInfo.innerHTML = `
-                    ${currentUser.id}
+                    ${currentUser.id}${devBadge}
                 `;
                 userInfo.style.display = 'block';
             }
@@ -4248,12 +4284,12 @@ ${allTexts}
                 }
                 
                 // Ctrl+Shift+S: サンプル10投稿を追加（開発用）
-                if (e.ctrlKey && e.shiftKey && e.key === 'S') {
+                if (e.ctrlKey && e.shiftKey && e.key === 'S' && isDeveloperMode) {
                     addSampleRecords();
                 }
                 
                 // Ctrl+Shift+L: 長文サンプル投稿を追加（開発用）
-                if (e.ctrlKey && e.shiftKey && e.key === 'L') {
+                if (e.ctrlKey && e.shiftKey && e.key === 'L' && isDeveloperMode) {
                     addLongSampleRecord();
                 }
             });
@@ -4262,7 +4298,10 @@ ${allTexts}
             const savedUser = localStorage.getItem('multasUser');
             if (savedUser) {
                 currentUser = JSON.parse(savedUser);
+                // 開発者モードフラグを復元
+                isDeveloperMode = currentUser.isDeveloper || false;
                 showUserInfo();
+                updateDeveloperUI();
                 initializeApp();
             } else {
                 // 初回ログインの場合、ログインモーダルを表示
