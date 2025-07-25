@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>MULTAs v2.2 [SAFETY MODE] - 医学実習レポート自動生成システム（安定版）</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <!-- PDF生成用ライブラリ -->
@@ -1356,11 +1356,12 @@
             }
             
             .container {
-                margin-top: 10px; /* ヘッダーが固定でなくなったので減らす */
+                margin-top: 0;
                 padding: 10px;
-                padding-bottom: 200px; /* 入力エリアの高さ分の余白 */
+                padding-bottom: 250px; /* 入力エリアの高さ分の余白を増やす */
                 width: 100%;
                 max-width: 100%;
+                min-height: 100vh; /* 最小高さを確保 */
             }
             
             .monitor {
