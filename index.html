@@ -1509,6 +1509,18 @@
                 font-size: 24px;
             }
         }
+        
+        /* 開発者モード用ゴーストボタンスタイル */
+        .ghost-reaction {
+            position: relative;
+            background-image: repeating-linear-gradient(
+                45deg,
+                transparent,
+                transparent 5px,
+                rgba(255, 255, 255, 0.1) 5px,
+                rgba(255, 255, 255, 0.1) 10px
+            );
+        }
     </style>
 </head>
 <body>
@@ -1692,7 +1704,10 @@
             <div class="monitor-content">
                 <div id="sharedLearning">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                        <h3 style="color: #7e57c2; margin: 0;">🌟 みんなの学び</h3>
+                        <h3 style="color: #7e57c2; margin: 0;">
+                            🌟 みんなの学び
+                            ${isDeveloperMode ? '<span style="font-size: 0.7em; color: #999; font-weight: normal;">(ローカルデモ)</span>' : ''}
+                        </h3>
                         <button onclick="backToList()" style="background: #7e57c2; color: white; border: none; padding: 8px 16px; border-radius: 20px; cursor: pointer;">
                             ← LISTに戻る
                         </button>
@@ -4398,12 +4413,14 @@ ${allTexts}
                                     </div>
                                     <!-- リアクションボタン -->
                                     <div style="display: flex; gap: 5px; align-items: center; margin-left: auto;">
-                                        <button onclick="toggleLike('${learning.id}')" style="background: ${liked ? '#ff4081' : '#f5f5f5'}; color: ${liked ? 'white' : '#666'}; border: none; padding: 4px 10px; border-radius: 15px; cursor: pointer; transition: all 0.3s; font-size: 13px; white-space: nowrap;">
+                                        ${isDeveloperMode ? `
+                                        <button onclick="toggleLike('${learning.id}')" style="background: ${liked ? 'rgba(255, 64, 129, 0.3)' : 'rgba(245, 245, 245, 0.5)'}; color: ${liked ? 'rgba(255, 255, 255, 0.7)' : 'rgba(102, 102, 102, 0.5)'}; border: 1px dashed rgba(200, 200, 200, 0.5); padding: 4px 10px; border-radius: 15px; cursor: pointer; transition: all 0.3s; font-size: 13px; white-space: nowrap; opacity: 0.6;" title="開発モード: ローカルストレージのみ">
                                             ❤️ いいね ${learning.likes > 0 ? `(${learning.likes})` : ''}
                                         </button>
-                                        <button onclick="addReaction('${learning.id}', '🙋')" style="background: ${learning.reactions && learning.reactions[currentUser?.id || 'anonymous']?.includes('🙋') ? '#4caf50' : '#f0f0f0'}; color: ${learning.reactions && learning.reactions[currentUser?.id || 'anonymous']?.includes('🙋') ? 'white' : '#333'}; border: none; padding: 4px 10px; border-radius: 15px; cursor: pointer; font-size: 13px; white-space: nowrap;">
+                                        <button onclick="addReaction('${learning.id}', '🙋')" style="background: ${learning.reactions && learning.reactions[currentUser?.id || 'anonymous']?.includes('🙋') ? 'rgba(76, 175, 80, 0.3)' : 'rgba(240, 240, 240, 0.5)'}; color: ${learning.reactions && learning.reactions[currentUser?.id || 'anonymous']?.includes('🙋') ? 'rgba(255, 255, 255, 0.7)' : 'rgba(51, 51, 51, 0.5)'}; border: 1px dashed rgba(200, 200, 200, 0.5); padding: 4px 10px; border-radius: 15px; cursor: pointer; font-size: 13px; white-space: nowrap; opacity: 0.6;" title="開発モード: ローカルストレージのみ">
                                             🙋 私も経験した! ${learning.reactions ? `(${Object.keys(learning.reactions).length})` : ''}
                                         </button>
+                                        ` : ''}
                                     </div>
                                 </div>
                                 <div style="font-size: 0.95rem; line-height: 1.5; margin: 10px 0;">
@@ -4744,6 +4761,18 @@ ${allTexts}
         
         button {
             display: none;
+        }
+        
+        /* 開発者モード用ゴーストボタンスタイル */
+        .ghost-reaction {
+            position: relative;
+            background-image: repeating-linear-gradient(
+                45deg,
+                transparent,
+                transparent 5px,
+                rgba(255, 255, 255, 0.1) 5px,
+                rgba(255, 255, 255, 0.1) 10px
+            );
         }
     </style>
 </head>
