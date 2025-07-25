@@ -1653,14 +1653,14 @@
                     </div>
                 </div>
                 <!-- みんなの学びボタン（LIST内配置） -->
-                <div id="sharedLearningBtnArea" style="text-align: center; margin-top: 30px; padding: 20px 0;">
-                    <button class="shared-learning-btn" onclick="toggleSharedLearning()" style="background: linear-gradient(135deg, #ff6b6b 0%, #feca57 100%); border: none; padding: 15px 30px; border-radius: 30px; color: white; font-weight: bold; cursor: pointer; box-shadow: 0 4px 15px rgba(0,0,0,0.2); transition: all 0.3s; display: inline-flex; align-items: center; gap: 10px;">
-                        <span style="font-size: 24px; position: relative;">
-                            <span style="position: absolute; left: -8px; top: -5px; opacity: 0.7;">💬</span>
-                            <span style="position: absolute; left: 5px; top: -8px; opacity: 0.8;">💬</span>
+                <div id="sharedLearningBtnArea" class="dev-only" style="text-align: center; margin-top: 30px; padding: 20px 0; display: none;">
+                    <button class="shared-learning-btn" onclick="toggleSharedLearning()" style="background: linear-gradient(135deg, rgba(255, 107, 107, 0.3) 0%, rgba(254, 202, 87, 0.3) 100%); border: 2px dashed rgba(255, 107, 107, 0.5); padding: 15px 30px; border-radius: 30px; color: rgba(255, 255, 255, 0.8); font-weight: bold; cursor: pointer; box-shadow: 0 4px 15px rgba(0,0,0,0.1); transition: all 0.3s; display: inline-flex; align-items: center; gap: 10px; opacity: 0.7;" title="開発モード: ローカルデモ機能">
+                        <span style="font-size: 24px; position: relative; opacity: 0.6;">
+                            <span style="position: absolute; left: -8px; top: -5px; opacity: 0.5;">💬</span>
+                            <span style="position: absolute; left: 5px; top: -8px; opacity: 0.6;">💬</span>
                             <span style="position: relative;">💬</span>
                         </span>
-                        <span style="font-size: 16px;">みんなの学び</span>
+                        <span style="font-size: 16px;">みんなの学び <span style="font-size: 0.8em; opacity: 0.7;">(Demo)</span></span>
                     </button>
                 </div>
             </div>
@@ -2756,13 +2756,13 @@ y軸（-1.0〜1.0）: -1=臨床（ベッドサイド） ← → +1=地域・社�
                                         <div class="element-display">
                                             <div class="element-text">${elem.elementContent}</div>
                                             <div style="display: flex; gap: 8px; align-items: center;">
-                                                ${isShared ? `
-                                                    <span style="color: #4CAF50; font-size: 0.9rem;">✅ 共有済み</span>
+                                                ${isDeveloperMode ? (isShared ? `
+                                                    <span style="color: rgba(76, 175, 80, 0.6); font-size: 0.9rem;">✅ 共有済み</span>
                                                 ` : `
-                                                    <span class="share-icon" onclick="quickShareLearning(${categoryId}, '${elem.elementContent.replace(/'/g, "\\'")}', '${elem.elementReason ? elem.elementReason.replace(/'/g, "\\'") : ''}')" title="みんなの学びに共有" style="cursor: pointer; font-size: 1.1rem;">
+                                                    <span class="share-icon dev-only" onclick="quickShareLearning(${categoryId}, '${elem.elementContent.replace(/'/g, "\\'")}', '${elem.elementReason ? elem.elementReason.replace(/'/g, "\\'") : ''}')" title="開発モード: ローカル共有のみ" style="cursor: pointer; font-size: 1.1rem; opacity: 0.5;">
                                                         📤
                                                     </span>
-                                                `}
+                                                `) : ''}
                                             </div>
                                         </div>
                                     </div>
@@ -2775,21 +2775,23 @@ y軸（-1.0〜1.0）: -1=臨床（ベッドサイド） ← → +1=地域・社�
             
             organizedView.innerHTML = html || '<div class="empty-state"><p>分類された要素がありません</p></div>';
             
-            // みんなの学びボタンを再追加
-            const btnArea = document.getElementById('sharedLearningBtnArea');
-            if (!btnArea) {
-                organizedView.innerHTML += `
-                    <div id="sharedLearningBtnArea" style="text-align: center; margin-top: 30px; padding: 20px 0;">
-                        <button class="shared-learning-btn" onclick="toggleSharedLearning()" style="background: linear-gradient(135deg, #ff6b6b 0%, #feca57 100%); border: none; padding: 15px 30px; border-radius: 30px; color: white; font-weight: bold; cursor: pointer; box-shadow: 0 4px 15px rgba(0,0,0,0.2); transition: all 0.3s; display: inline-flex; align-items: center; gap: 10px;">
-                            <span style="font-size: 24px; position: relative;">
-                                <span style="position: absolute; left: -8px; top: -5px; opacity: 0.7;">💬</span>
-                                <span style="position: absolute; left: 5px; top: -8px; opacity: 0.8;">💬</span>
-                                <span style="position: relative;">💬</span>
-                            </span>
-                            <span style="font-size: 16px;">みんなの学び</span>
-                        </button>
-                    </div>
-                `;
+            // みんなの学びボタンを再追加（開発者モードのみ）
+            if (isDeveloperMode) {
+                const btnArea = document.getElementById('sharedLearningBtnArea');
+                if (!btnArea) {
+                    organizedView.innerHTML += `
+                        <div id="sharedLearningBtnArea" class="dev-only" style="text-align: center; margin-top: 30px; padding: 20px 0;">
+                            <button class="shared-learning-btn" onclick="toggleSharedLearning()" style="background: linear-gradient(135deg, rgba(255, 107, 107, 0.3) 0%, rgba(254, 202, 87, 0.3) 100%); border: 2px dashed rgba(255, 107, 107, 0.5); padding: 15px 30px; border-radius: 30px; color: rgba(255, 255, 255, 0.8); font-weight: bold; cursor: pointer; box-shadow: 0 4px 15px rgba(0,0,0,0.1); transition: all 0.3s; display: inline-flex; align-items: center; gap: 10px; opacity: 0.7;" title="開発モード: ローカルデモ機能">
+                                <span style="font-size: 24px; position: relative; opacity: 0.6;">
+                                    <span style="position: absolute; left: -8px; top: -5px; opacity: 0.5;">💬</span>
+                                    <span style="position: absolute; left: 5px; top: -8px; opacity: 0.6;">💬</span>
+                                    <span style="position: relative;">💬</span>
+                                </span>
+                                <span style="font-size: 16px;">みんなの学び <span style="font-size: 0.8em; opacity: 0.7;">(Demo)</span></span>
+                            </button>
+                        </div>
+                    `;
+                }
             }
         }
 
@@ -4441,13 +4443,16 @@ ${allTexts}
             html += '</div>';
             
             // 自分の記録を共有するボタン
-            html += `
-                <div style="text-align: center; margin-top: 30px;">
-                    <button onclick="shareMyLearning()" class="btn-secondary" style="background: #7e57c2;">
-                        📤 自分の学びを共有する
-                    </button>
-                </div>
-            `;
+            // 開発者モードの場合のみ共有ボタンを表示
+            if (isDeveloperMode) {
+                html += `
+                    <div style="text-align: center; margin-top: 30px;">
+                        <button onclick="shareMyLearning()" class="btn-secondary" style="background: rgba(126, 87, 194, 0.3); border: 2px dashed rgba(126, 87, 194, 0.5); color: rgba(255, 255, 255, 0.8); opacity: 0.7;" title="開発モード: ローカル共有のみ">
+                            📤 自分の学びを共有する
+                        </button>
+                    </div>
+                `;
+            }
             
             container.innerHTML = html;
             updateSharedStats();
