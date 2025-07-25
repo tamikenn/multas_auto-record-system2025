@@ -1521,6 +1521,166 @@
                 rgba(255, 255, 255, 0.1) 10px
             );
         }
+
+        /* === 個人情報アラート スタイル === */
+        .personal-info-alert {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .alert-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(5px);
+        }
+
+        .alert-modal {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            position: relative;
+            z-index: 1;
+            animation: alertSlideIn 0.3s ease-out;
+        }
+
+        @keyframes alertSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-50px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .alert-header {
+            background: linear-gradient(135deg, #ff6b6b, #ee5a24);
+            color: white;
+            padding: 20px;
+            border-radius: 15px 15px 0 0;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .alert-icon {
+            font-size: 2rem;
+        }
+
+        .alert-header h3 {
+            margin: 0;
+            font-size: 1.5rem;
+        }
+
+        .alert-content {
+            padding: 25px;
+            line-height: 1.6;
+        }
+
+        .alert-content ul {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+
+        .alert-reason {
+            color: #666;
+            font-style: italic;
+            margin: 15px 0;
+        }
+
+        .alert-suggestion {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+
+        .alert-actions {
+            padding: 0 25px 25px;
+            display: flex;
+            gap: 15px;
+            justify-content: flex-end;
+        }
+
+        .alert-btn {
+            padding: 12px 25px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .edit-btn {
+            background: #74b9ff;
+            color: white;
+        }
+
+        .edit-btn:hover {
+            background: #0984e3;
+            transform: translateY(-2px);
+        }
+
+        .continue-btn {
+            background: #00b894;
+            color: white;
+        }
+
+        .continue-btn:hover {
+            background: #00a085;
+            transform: translateY(-2px);
+        }
+
+        .loading-indicator {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body>
@@ -1887,6 +2047,29 @@
             if (!experienceText) {
                 showStatus('体験内容を入力してください。', 'error');
                 return;
+            }
+
+            // 個人情報チェック実行
+            showLoadingIndicator('個人情報をチェック中...');
+            
+            try {
+                const checkResult = await checkPersonalInformation(experienceText);
+                hideLoadingIndicator();
+                
+                if (checkResult.hasPersonalInfo) {
+                    // アラート表示してユーザーの選択を待つ
+                    const shouldContinue = await showPersonalInfoAlert(checkResult);
+                    
+                    if (!shouldContinue) {
+                        // 修正を選択した場合、入力欄にフォーカス
+                        document.getElementById('experienceText').focus();
+                        return;
+                    }
+                }
+            } catch (error) {
+                hideLoadingIndicator();
+                console.error('個人情報チェックでエラー:', error);
+                // エラー時は通常処理を続行
             }
 
             // UI状態を処理中に変更
@@ -2461,6 +2644,204 @@
             }
         }
         
+        // === 個人情報チェック機能 ===
+        const PERSONAL_INFO_CHECK_PROMPT = `以下の医学実習記録テキストに、患者を特定できる個人情報が含まれているかチェックしてください。
+
+【検出対象 - 警告が必要】
+- フルネーム（田中太郎、佐藤花子、山田一郎など）
+- 生年月日（1980年3月15日、昭和55年生まれなど）
+- 住所の詳細（東京都新宿区○○町1-2-3など）
+- 電話番号（090-1234-5678など）
+
+【許容対象 - 警告不要】
+- 年齢・性別（75歳男性、60代女性など）
+- イニシャル（A.Kさん、T.S様など）
+- 医学用語の固有名詞（川崎病、菊池病、Johnson分類、Crohn病、Parkinson病など）
+- 症状や所見の記述
+- 病院内の場所（3階病棟、外来など）
+
+テキスト: "{{INPUT_TEXT}}"
+
+以下のJSON形式で回答してください：
+{
+  "hasPersonalInfo": true/false,
+  "detectedItems": ["検出された項目1", "検出された項目2"],
+  "reason": "検出理由の説明",
+  "suggestion": "修正提案（あれば）"
+}`;
+
+        /**
+         * 個人情報チェック
+         */
+        async function checkPersonalInformation(inputText) {
+            try {
+                // OpenAI APIでチェック
+                const prompt = PERSONAL_INFO_CHECK_PROMPT.replace('{{INPUT_TEXT}}', inputText);
+                
+                const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${OPENAI_API_KEY}`
+                    },
+                    body: JSON.stringify({
+                        model: 'gpt-4o-mini',
+                        messages: [
+                            {
+                                role: 'system',
+                                content: 'あなたは医学教育における個人情報保護の専門家です。実習記録から患者を特定できる情報を正確に検出してください。'
+                            },
+                            {
+                                role: 'user',
+                                content: prompt
+                            }
+                        ],
+                        temperature: 0.1,
+                        max_tokens: 500
+                    })
+                });
+
+                const data = await response.json();
+                const result = JSON.parse(data.choices[0].message.content);
+                
+                return {
+                    success: true,
+                    ...result
+                };
+                
+            } catch (error) {
+                console.error('個人情報チェックエラー:', error);
+                // フォールバック：基本的なルールベースチェック
+                return performBasicPersonalInfoCheck(inputText);
+            }
+        }
+
+        /**
+         * フォールバック：基本的なルールベースチェック
+         */
+        function performBasicPersonalInfoCheck(inputText) {
+            const detectedItems = [];
+            
+            // 生年月日パターン
+            const datePatterns = [
+                /\d{4}年\d{1,2}月\d{1,2}日/g,
+                /昭和\d{1,2}年/g,
+                /平成\d{1,2}年/g,
+                /\d{4}\/\d{1,2}\/\d{1,2}/g
+            ];
+            
+            datePatterns.forEach(pattern => {
+                if (pattern.test(inputText)) {
+                    detectedItems.push('生年月日の可能性');
+                }
+            });
+            
+            // フルネームの可能性（苗字+名前の組み合わせ）
+            const namePattern = /[一-龯]{1,4}[一-龯]{1,4}[さん|様|氏|君]/g;
+            if (namePattern.test(inputText)) {
+                detectedItems.push('フルネームの可能性');
+            }
+            
+            return {
+                success: true,
+                hasPersonalInfo: detectedItems.length > 0,
+                detectedItems: detectedItems,
+                reason: detectedItems.length > 0 ? 'ルールベース検出' : '問題なし',
+                suggestion: detectedItems.length > 0 ? '年齢・性別での記述をお勧めします' : ''
+            };
+        }
+
+        /**
+         * アラート表示機能
+         */
+        function showPersonalInfoAlert(checkResult) {
+            return new Promise((resolve) => {
+                // アラートHTML生成
+                const alertHTML = `
+                    <div id="personalInfoAlert" class="personal-info-alert">
+                        <div class="alert-overlay"></div>
+                        <div class="alert-modal">
+                            <div class="alert-header">
+                                <span class="alert-icon">🚨</span>
+                                <h3>個人情報チェック</h3>
+                            </div>
+                            <div class="alert-content">
+                                <p><strong>以下の内容が検出されました：</strong></p>
+                                <ul>
+                                    ${checkResult.detectedItems.map(item => `<li>${item}</li>`).join('')}
+                                </ul>
+                                <p class="alert-reason">${checkResult.reason}</p>
+                                ${checkResult.suggestion ? `
+                                    <div class="alert-suggestion">
+                                        <strong>📝 修正提案：</strong><br>
+                                        ${checkResult.suggestion}
+                                    </div>
+                                ` : ''}
+                            </div>
+                            <div class="alert-actions">
+                                <button id="editButton" class="alert-btn edit-btn">✏️ 修正する</button>
+                                <button id="continueButton" class="alert-btn continue-btn">➡️ このまま続行</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                // アラートをDOMに追加
+                document.body.insertAdjacentHTML('beforeend', alertHTML);
+                
+                // イベントリスナー設定
+                document.getElementById('editButton').addEventListener('click', () => {
+                    removeAlert();
+                    resolve(false); // 修正を選択
+                });
+                
+                document.getElementById('continueButton').addEventListener('click', () => {
+                    removeAlert();
+                    resolve(true); // 続行を選択
+                });
+                
+                // オーバーレイクリックで閉じる
+                document.querySelector('.alert-overlay').addEventListener('click', () => {
+                    removeAlert();
+                    resolve(false);
+                });
+            });
+        }
+
+        /**
+         * アラート削除
+         */
+        function removeAlert() {
+            const alert = document.getElementById('personalInfoAlert');
+            if (alert) {
+                alert.remove();
+            }
+        }
+
+        /**
+         * ローディングインジケーター表示
+         */
+        function showLoadingIndicator(message) {
+            const indicator = document.createElement('div');
+            indicator.id = 'loadingIndicator';
+            indicator.className = 'loading-indicator';
+            indicator.innerHTML = `
+                <div class="loading-spinner"></div>
+                <span>${message}</span>
+            `;
+            document.body.appendChild(indicator);
+        }
+
+        /**
+         * ローディングインジケーター非表示
+         */
+        function hideLoadingIndicator() {
+            const indicator = document.getElementById('loadingIndicator');
+            if (indicator) {
+                indicator.remove();
+            }
+        }
+
         // === 12時計AI分類関数（単一分類） ===
         async function classifyWithAI(recordText) {
             // APIキーチェック
