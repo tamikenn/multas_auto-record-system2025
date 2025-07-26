@@ -199,6 +199,13 @@
             display: none !important;
         }
         
+        /* 非アクティブなモニター内の要素を確実に非表示 */
+        .monitor:not(.active) .radar-chart-container,
+        .monitor:not(.active) .radar-chart-title,
+        .monitor:not(.active) #radarChartContainer {
+            display: none !important;
+        }
+        
 
         .monitor h3 {
             margin-bottom: 15px;
@@ -1097,9 +1104,21 @@
             background: rgba(255, 255, 255, 0.95);
             border-radius: 15px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            display: block; /* !important を削除 */
+            display: none; /* デフォルトは非表示 */
             position: relative;
             z-index: 1;
+        }
+        
+        /* monitor3内でのみレーダーチャートを表示 */
+        #monitor3.active .radar-chart-container {
+            display: block;
+        }
+        
+        /* monitor3以外では必ず非表示 */
+        .monitor:not(#monitor3) .radar-chart-container,
+        .monitor:not(#monitor3) .radar-chart-title,
+        .monitor:not(#monitor3) #radarChartContainer {
+            display: none !important;
         }
         
         #radarChart {
