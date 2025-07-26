@@ -2136,6 +2136,8 @@
             totalPosts = gameData.totalPosts || 0;
             generatedReports = gameData.generatedReports || {};
             categoryPointsByDay = gameData.categoryPointsByDay || categoryPointsByDay;
+            records = gameData.records || [];
+            recordIdCounter = gameData.recordIdCounter || 0;
         }
 
         // === 12時計カテゴリの色定義 ===
@@ -2196,6 +2198,8 @@
                 };
 
                 records.unshift(localRecord);
+                console.log('記録を追加しました:', localRecord);
+                console.log('現在の記録数:', records.length);
                 
                 // UIを即座に更新
                 updateRecordsList();
@@ -2672,7 +2676,9 @@
                 userExp: userExp,
                 totalPosts: totalPosts,
                 generatedReports: generatedReports,
-                categoryPointsByDay: categoryPointsByDay
+                categoryPointsByDay: categoryPointsByDay,
+                records: records,
+                recordIdCounter: recordIdCounter
             };
             localStorage.setItem('multasGameData', JSON.stringify(gameData));
         }
@@ -4672,6 +4678,9 @@ ${allTexts}
             // 初期経験値表示
             updateExpDisplay();
             updateAllViews();
+            
+            // 保存された記録を表示
+            updateRecordsList();
             
             // 明示的にmonitor1（LOG）を初期表示
             switchMonitor('monitor1');
