@@ -2197,6 +2197,11 @@
 
                 records.unshift(localRecord);
                 
+                // UIを即座に更新
+                updateRecordsList();
+                updateOrganizedView();
+                saveGameData();
+                
                 // 長文判定（150文字以上）
                 if (experienceText.length >= 150) {
                     // 要素分解を実行
@@ -2344,6 +2349,9 @@
                 statsElement.style.display = 'block';
             }
             
+            // currentMonitorを先に更新（updateRadarChartが正しく動作するため）
+            currentMonitor = monitorId;
+            
             // REPORT画面の場合の処理
             if (monitorId === 'monitor3') {
                 // レーダーチャートを更新
@@ -2358,8 +2366,6 @@
             } else if (monitorId === 'monitor2') {
                 updateOrganizedView();
             }
-
-            currentMonitor = monitorId;
             
             // みんなの学び画面の場合
             if (monitorId === 'monitor4') {
@@ -4569,13 +4575,12 @@ ${allTexts}
         function updateDeveloperUI() {
             const devElements = document.querySelectorAll('.dev-only');
             devElements.forEach(el => {
-                // ボタンとドロップダウンオプションで表示方法を変える
-                if (el.classList.contains('btn-secondary')) {
-                    el.style.display = isDeveloperMode ? 'block' : 'none';
-                } else if (el.classList.contains('day-option')) {
-                    el.style.display = isDeveloperMode ? 'block' : 'none';
+                // 開発者モードの場合は表示、そうでない場合は非表示
+                if (isDeveloperMode) {
+                    el.style.display = el.tagName === 'BUTTON' ? 'inline-block' : 'block';
+                    el.style.visibility = 'visible';
                 } else {
-                    el.style.display = isDeveloperMode ? 'block' : 'none';
+                    el.style.display = 'none';
                 }
             });
             
