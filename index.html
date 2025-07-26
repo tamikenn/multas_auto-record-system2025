@@ -200,10 +200,7 @@
             display: none !important;
         }
         
-        /* 非アクティブなモニターの全コンテンツを確実に非表示 */
-        .monitor:not(.active) * {
-            visibility: hidden !important;
-        }
+        /* 非アクティブなモニターの全コンテンツを確実に非表示（削除：問題を引き起こすため） */
 
         .monitor h3 {
             margin-bottom: 15px;
@@ -789,6 +786,11 @@
             padding: 15px 20px 20px;
             flex-shrink: 0;
             box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+        }
+        
+        /* LOG画面専用の入力エリアの初期非表示 */
+        #monitor1-input {
+            display: none;
             position: fixed;
             bottom: 0;
             left: 0;
@@ -1991,7 +1993,7 @@
         </div>
         
         <!-- LOG画面専用の入力エリア（main-contentの外に配置） -->
-        <div class="bottom-input" id="monitor1-input" style="display: none;">
+        <div class="bottom-input" id="monitor1-input">
             <div class="input-row">
                 <div class="experience-input" style="position: relative;">
                     <textarea id="experienceTextInput" placeholder="実習で体験したことを記録…"></textarea>
@@ -2137,7 +2139,16 @@
             generatedReports = gameData.generatedReports || {};
             categoryPointsByDay = gameData.categoryPointsByDay || categoryPointsByDay;
             records = gameData.records || [];
+            // timestampを Date オブジェクトに変換
+            records = records.map(record => ({
+                ...record,
+                timestamp: record.timestamp ? new Date(record.timestamp) : new Date()
+            }));
             recordIdCounter = gameData.recordIdCounter || 0;
+            console.log('LocalStorageから記録を復元:', records.length, '件');
+            console.log('ゲームデータ読み込み完了 - records数:', records.length);
+        } else {
+            console.log('保存されたゲームデータなし');
         }
 
         // === 12時計カテゴリの色定義 ===
@@ -2314,6 +2325,8 @@
 
         // === モニター切り替え ===
         function switchMonitor(monitorId) {
+            console.log('switchMonitor呼び出し:', monitorId);
+            
             // 全モニターを非表示
             document.querySelectorAll('.monitor').forEach(monitor => {
                 monitor.classList.remove('active');
@@ -3014,13 +3027,25 @@ y軸（-1.0〜1.0）: -1=臨床（ベッドサイド） ← → +1=地域・社�
 
         // === 現在の日付の記録を取得 ===
         function getCurrentDayRecords() {
-            return records.filter(record => record.day === currentDay);
+            // recordのdayプロパティがundefinedの場合は現在の日付として扱う
+            return records.filter(record => {
+                if (!record.day) {
+                    return currentDay === 1; // dayがない古い記録は1日目として扱う
+                }
+                return record.day === currentDay;
+            });
         }
 
         // === 記録リスト更新（モニター1） ===
         function updateRecordsList() {
             const recordsList = document.getElementById('recordsList');
+            if (!recordsList) {
+                console.error('updateRecordsList: recordsListが見つかりません');
+                return;
+            }
+            
             const dayRecords = getCurrentDayRecords();
+            console.log('updateRecordsList: 現在の日の記録数:', dayRecords.length, 'currentDay:', currentDay);
             
             if (dayRecords.length === 0) {
                 recordsList.innerHTML = `
@@ -4684,6 +4709,13 @@ ${allTexts}
             
             // 明示的にmonitor1（LOG）を初期表示
             switchMonitor('monitor1');
+            
+            // monitor1-inputを確実に表示（初期化時の保険）
+            const monitor1Input = document.getElementById('monitor1-input');
+            if (monitor1Input) {
+                console.log('初期化: monitor1-inputを表示');
+                monitor1Input.style.display = 'block';
+            }
             
             // Enter キーでの送信
             document.getElementById('experienceText').addEventListener('keydown', function(e) {
