@@ -1099,16 +1099,14 @@
             background: rgba(255, 255, 255, 0.95);
             border-radius: 15px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            display: block !important;
+            display: block; /* !important を削除 */
             position: relative;
             z-index: 1;
-            /* スクロール可能にする */
-            position: static;
         }
         
         #radarChart {
             max-height: 280px;
-            display: block !important;
+            display: block; /* !important を削除 */
         }
         
         .radar-chart-title {
@@ -1524,7 +1522,7 @@
             
             #radarChart {
                 max-width: 100%;
-                height: auto !important;
+                height: auto; /* !important を削除 */
                 margin: 0 auto;
             }
             
