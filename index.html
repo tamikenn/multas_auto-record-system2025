@@ -199,6 +199,11 @@
         .monitor:not(.active) .bottom-input {
             display: none !important;
         }
+        
+        /* 非アクティブなモニターの全コンテンツを確実に非表示 */
+        .monitor:not(.active) * {
+            visibility: hidden !important;
+        }
 
         .monitor h3 {
             margin-bottom: 15px;
@@ -3353,6 +3358,11 @@ ${currentDay === '5' ?
         let radarChartInstance = null;
         
         function updateRadarChart() {
+            // REPORTタブでない場合は処理をスキップ
+            if (currentMonitor !== 'monitor3') {
+                return;
+            }
+            
             // canvas要素の存在確認
             const canvas = document.getElementById('radarChart');
             if (!canvas) {
@@ -4323,8 +4333,10 @@ ${allTexts}
             // 表示を更新
             updateAllViews();
             
-            // レーダーチャートを常に更新
-            updateRadarChart();
+            // REPORTタブが表示されている時のみレーダーチャートを更新
+            if (currentMonitor === 'monitor3') {
+                updateRadarChart();
+            }
             
             // REPORTモニターがアクティブな場合は、レポート表示も更新
             if (currentMonitor === 'monitor3') {
