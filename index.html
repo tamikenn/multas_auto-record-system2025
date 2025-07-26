@@ -1096,19 +1096,7 @@
         }
         
         /* === レーダーチャート === */
-        /* 全てのレーダーチャート関連要素をデフォルトで完全非表示 */
-        .radar-chart-container,
-        .radar-chart-title,
-        #radarChartContainer {
-            display: none !important;
-            visibility: hidden !important;
-            opacity: 0 !important;
-        }
-        
-        /* monitor3がアクティブな時のみ表示 */
-        #monitor3.active .radar-chart-container,
-        #monitor3.active .radar-chart-title,
-        #monitor3.active #radarChartContainer {
+        .radar-chart-container {
             width: 100%;
             max-width: 350px;
             margin: 20px auto;
@@ -1116,9 +1104,6 @@
             background: rgba(255, 255, 255, 0.95);
             border-radius: 15px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            display: block !important;
-            visibility: visible !important;
-            opacity: 1 !important;
             position: relative;
             z-index: 1;
         }
@@ -1129,11 +1114,6 @@
         }
         
         .radar-chart-title {
-            display: none !important; /* デフォルトで非表示 */
-        }
-        
-        #monitor3.active .radar-chart-title {
-            display: block !important;
             text-align: center;
             font-size: 18px;
             font-weight: bold;
@@ -1943,7 +1923,7 @@
         <div id="monitor3" class="monitor">
             <div class="monitor-content">
                 <!-- レーダーチャート表示エリア -->
-                <div id="radarChartContainer" class="radar-chart-container">
+                <div id="radarChartContainer" class="radar-chart-container" style="display: none;">
                     <div class="radar-chart-title">12時計分類 体験チャート</div>
                     <canvas id="radarChart"></canvas>
                     <div class="radar-legend" id="radarLegend"></div>
@@ -3467,8 +3447,14 @@ ${currentDay === '5' ?
         function updateRadarChart() {
             // REPORTタブでない場合は処理をスキップ
             if (currentMonitor !== 'monitor3') {
+                const container = document.getElementById('radarChartContainer');
+                if (container) container.style.display = 'none';
                 return;
             }
+            
+            // REPORTタブの場合は表示
+            const container = document.getElementById('radarChartContainer');
+            if (container) container.style.display = 'block';
             
             // canvas要素の存在確認
             const canvas = document.getElementById('radarChart');
@@ -4775,16 +4761,16 @@ ${allTexts}
                 monitor1Input.style.display = 'block';
             }
             
-            // レーダーチャート要素を確実に非表示（初期化時の保険）
+            // レーダーチャート要素のインラインスタイルをクリア（CSSに任せる）
             const radarContainer = document.getElementById('radarChartContainer');
             if (radarContainer) {
-                radarContainer.style.display = 'none';
-                radarContainer.style.visibility = 'hidden';
+                radarContainer.style.display = '';
+                radarContainer.style.visibility = '';
             }
             const radarTitle = document.querySelector('.radar-chart-title');
             if (radarTitle) {
-                radarTitle.style.display = 'none';
-                radarTitle.style.visibility = 'hidden';
+                radarTitle.style.display = '';
+                radarTitle.style.visibility = '';
             }
             
             // Enter キーでの送信
