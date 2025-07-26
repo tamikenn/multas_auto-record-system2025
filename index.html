@@ -34,7 +34,6 @@
             left: 0;
         }
 
-        /* ヘッダーは削除済み */
 
         /* === 日付選択 === */
         .day-selector {
@@ -200,7 +199,6 @@
             display: none !important;
         }
         
-        /* 非アクティブなモニターの全コンテンツを確実に非表示（削除：問題を引き起こすため） */
 
         .monitor h3 {
             margin-bottom: 15px;
@@ -2013,11 +2011,29 @@
     
 
     <script>
-        // === グローバル変数 ===
-        let records = [];
-        let recordIdCounter = 0;
-        let currentMonitor = 'monitor1';
-        let currentDay = 1;  // 現在の日付（1-5またはpractice）
+        // === アプリケーション状態管理 ===
+        const AppState = {
+            records: [],
+            recordIdCounter: 0,
+            currentMonitor: 'monitor1',
+            currentDay: 1,
+            userLevel: 1,
+            userExp: 0,
+            totalPosts: 0,
+            generatedReports: {},
+            categoryPointsByDay: {},
+            currentUser: null,
+            isDeveloperMode: false,
+            OPENAI_API_KEY: null,
+            radarChartInstance: null,
+            summaryReportHtml: null
+        };
+        
+        // 互換性のためのエイリアス
+        let records = AppState.records;
+        let recordIdCounter = AppState.recordIdCounter;
+        let currentMonitor = AppState.currentMonitor;
+        let currentDay = AppState.currentDay;
         
         // === DOM要素キャッシュ ===
         const DOM = {};
@@ -2128,28 +2144,19 @@
         });
         
         // ローカルストレージから読み込み
-        const savedGameData = localStorage.getItem('multasGameData');
-        if (savedGameData) {
-            const gameData = JSON.parse(savedGameData);
-            userLevel = gameData.userLevel || 1;
-            userExp = gameData.userExp || 0;
-            totalPosts = gameData.totalPosts || 0;
-            generatedReports = gameData.generatedReports || {};
-            categoryPointsByDay = gameData.categoryPointsByDay || categoryPointsByDay;
-            records = gameData.records || [];
-            // timestampを Date オブジェクトに変換
-            records = records.map(record => ({
-                ...record,
-                timestamp: record.timestamp ? new Date(record.timestamp) : new Date()
-            }));
-            recordIdCounter = gameData.recordIdCounter || 0;
-            console.log('LocalStorageから記録を復元:', records.length, '件');
-            console.log('ゲームデータ読み込み完了 - records数:', records.length);
-        } else {
-            console.log('保存されたゲームデータなし');
-        }
+        Storage.load();
 
-        // === 12時計カテゴリの色定義 ===
+        // === 定数定義 ===
+        const CONSTANTS = {
+            API_KEY_LENGTH: 51,
+            MIN_POSTS_FOR_REPORT: 10,
+            EXP_MULTIPLIER: 100,
+            LONG_TEXT_THRESHOLD: 150,
+            STATUS_MESSAGE_DURATION: 5000,
+            SUMMARY_CHART_DURATION: 3000
+        };
+        
+        // === 12時計カテゴリの定義 ===
         const AI_CATEGORIES = {
             0: { name: '❓ 分類不能', color: '#b2bec3' },
             1: { name: '⚖️ 医療倫理', color: '#ff9ff3' },
@@ -2207,8 +2214,6 @@
                 };
 
                 records.unshift(localRecord);
-                console.log('記録を追加しました:', localRecord);
-                console.log('現在の記録数:', records.length);
                 
                 // UIを即座に更新
                 updateRecordsList();
@@ -2299,12 +2304,9 @@
                         }
                     }
                 } catch (gasError) {
-                    console.log('GAS処理はスキップ（ローカル動作）:', gasError);
                 }
 
             } catch (error) {
-                // ローカル環境では正常動作なのでエラー表示しない
-                console.log('ローカル環境での動作:', error);
             } finally {
                 // UI状態を元に戻す
                 submitBtn.disabled = false;
@@ -2681,17 +2683,63 @@
         }
         
         // === ゲームデータ保存 ===
+        // === LocalStorage管理 ===
+        const Storage = {
+            save: function() {
+                const gameData = {
+                    userLevel: userLevel,
+                    userExp: userExp,
+                    totalPosts: totalPosts,
+                    generatedReports: generatedReports,
+                    categoryPointsByDay: categoryPointsByDay,
+                    records: records,
+                    recordIdCounter: recordIdCounter
+                };
+                localStorage.setItem('multasGameData', JSON.stringify(gameData));
+            },
+            
+            load: function() {
+                const savedData = localStorage.getItem('multasGameData');
+                if (savedData) {
+                    const gameData = JSON.parse(savedData);
+                    userLevel = gameData.userLevel || 1;
+                    userExp = gameData.userExp || 0;
+                    totalPosts = gameData.totalPosts || 0;
+                    generatedReports = gameData.generatedReports || {};
+                    categoryPointsByDay = gameData.categoryPointsByDay || categoryPointsByDay;
+                    records = gameData.records || [];
+                    // timestampを Date オブジェクトに変換
+                    records = records.map(record => ({
+                        ...record,
+                        timestamp: record.timestamp ? new Date(record.timestamp) : new Date()
+                    }));
+                    recordIdCounter = gameData.recordIdCounter || 0;
+                    return true;
+                }
+                return false;
+            },
+            
+            saveUser: function(user) {
+                localStorage.setItem('multasUser', JSON.stringify(user));
+            },
+            
+            loadUser: function() {
+                const saved = localStorage.getItem('multasUser');
+                return saved ? JSON.parse(saved) : null;
+            },
+            
+            saveApiKey: function(key) {
+                localStorage.setItem('openai_api_key', key);
+            },
+            
+            loadApiKey: function() {
+                return localStorage.getItem('openai_api_key');
+            }
+        };
+        
+        // 互換性のためのエイリアス
         function saveGameData() {
-            const gameData = {
-                userLevel: userLevel,
-                userExp: userExp,
-                totalPosts: totalPosts,
-                generatedReports: generatedReports,
-                categoryPointsByDay: categoryPointsByDay,
-                records: records,
-                recordIdCounter: recordIdCounter
-            };
-            localStorage.setItem('multasGameData', JSON.stringify(gameData));
+            Storage.save();
         }
 
         // === 長文要素分解AI分類関数 ===
@@ -3038,12 +3086,10 @@ y軸（-1.0〜1.0）: -1=臨床（ベッドサイド） ← → +1=地域・社�
         function updateRecordsList() {
             const recordsList = document.getElementById('recordsList');
             if (!recordsList) {
-                console.error('updateRecordsList: recordsListが見つかりません');
                 return;
             }
             
             const dayRecords = getCurrentDayRecords();
-            console.log('updateRecordsList: 現在の日の記録数:', dayRecords.length, 'currentDay:', currentDay);
             
             if (dayRecords.length === 0) {
                 recordsList.innerHTML = `
@@ -4613,17 +4659,6 @@ ${allTexts}
                 }
             });
             
-            // 開発者モードの場合、コンソールにメッセージ表示
-            if (isDeveloperMode) {
-                console.log('🔧 開発者モードが有効です');
-                console.log('利用可能なショートカット:');
-                console.log('- Ctrl+Shift+S: サンプル10投稿を追加');
-                console.log('- Ctrl+Shift+L: 長文サンプル投稿を追加');
-                console.log('- Ctrl+Shift+X: ログアウト');
-                console.log('利用可能な機能:');
-                console.log('- 練習用日付選択');
-                console.log('- サンプル投稿ボタン');
-            }
         }
         
         // === ユーザー情報表示 ===
@@ -4708,10 +4743,9 @@ ${allTexts}
             // 明示的にmonitor1（LOG）を初期表示
             switchMonitor('monitor1');
             
-            // monitor1-inputを確実に表示（初期化時の保険）
+            // monitor1-inputを確実に表示
             const monitor1Input = document.getElementById('monitor1-input');
             if (monitor1Input) {
-                console.log('初期化: monitor1-inputを表示');
                 monitor1Input.style.display = 'block';
             }
             
