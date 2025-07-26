@@ -1096,7 +1096,19 @@
         }
         
         /* === レーダーチャート === */
-        .radar-chart-container {
+        /* 全てのレーダーチャート関連要素をデフォルトで完全非表示 */
+        .radar-chart-container,
+        .radar-chart-title,
+        #radarChartContainer {
+            display: none !important;
+            visibility: hidden !important;
+            opacity: 0 !important;
+        }
+        
+        /* monitor3がアクティブな時のみ表示 */
+        #monitor3.active .radar-chart-container,
+        #monitor3.active .radar-chart-title,
+        #monitor3.active #radarChartContainer {
             width: 100%;
             max-width: 350px;
             margin: 20px auto;
@@ -1104,21 +1116,11 @@
             background: rgba(255, 255, 255, 0.95);
             border-radius: 15px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            display: none; /* デフォルトは非表示 */
+            display: block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
             position: relative;
             z-index: 1;
-        }
-        
-        /* monitor3内でのみレーダーチャートを表示 */
-        #monitor3.active .radar-chart-container {
-            display: block;
-        }
-        
-        /* monitor3以外では必ず非表示 */
-        .monitor:not(#monitor3) .radar-chart-container,
-        .monitor:not(#monitor3) .radar-chart-title,
-        .monitor:not(#monitor3) #radarChartContainer {
-            display: none !important;
         }
         
         #radarChart {
@@ -1127,6 +1129,11 @@
         }
         
         .radar-chart-title {
+            display: none !important; /* デフォルトで非表示 */
+        }
+        
+        #monitor3.active .radar-chart-title {
+            display: block !important;
             text-align: center;
             font-size: 18px;
             font-weight: bold;
@@ -4766,6 +4773,18 @@ ${allTexts}
             const monitor1Input = document.getElementById('monitor1-input');
             if (monitor1Input) {
                 monitor1Input.style.display = 'block';
+            }
+            
+            // レーダーチャート要素を確実に非表示（初期化時の保険）
+            const radarContainer = document.getElementById('radarChartContainer');
+            if (radarContainer) {
+                radarContainer.style.display = 'none';
+                radarContainer.style.visibility = 'hidden';
+            }
+            const radarTitle = document.querySelector('.radar-chart-title');
+            if (radarTitle) {
+                radarTitle.style.display = 'none';
+                radarTitle.style.visibility = 'hidden';
             }
             
             // Enter キーでの送信
