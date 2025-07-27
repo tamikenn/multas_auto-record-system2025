@@ -413,10 +413,10 @@ export default function MobileInputTabs() {
       
       // PDFに含めるコンテンツを作成
       const pdfContent = document.createElement('div');
-      pdfContent.style.padding = '30px';
+      pdfContent.style.padding = '40px';
       pdfContent.style.backgroundColor = 'white';
       pdfContent.style.fontFamily = '-apple-system, BlinkMacSystemFont, sans-serif';
-      pdfContent.style.maxWidth = '1000px';
+      pdfContent.style.maxWidth = '1200px';
       pdfContent.style.margin = '0 auto';
       
       // タイトル
@@ -479,16 +479,17 @@ export default function MobileInputTabs() {
       // レーダーチャートとカテゴリ別集計を横並びに配置するコンテナ
       const analysisContainer = document.createElement('div');
       analysisContainer.style.display = 'flex';
-      analysisContainer.style.gap = '40px';
+      analysisContainer.style.gap = '60px';
       analysisContainer.style.marginTop = '40px';
-      analysisContainer.style.marginBottom = '60px';
+      analysisContainer.style.marginBottom = '80px';
       analysisContainer.style.pageBreakInside = 'avoid';
-      analysisContainer.style.minHeight = '500px';
+      analysisContainer.style.minHeight = '700px';
+      analysisContainer.style.alignItems = 'flex-start';
       
       // レーダーチャートセクション（左側）
       const chartSection = document.createElement('div');
-      chartSection.style.flex = '1';
-      chartSection.style.minWidth = '400px';
+      chartSection.style.flex = '1.5';
+      chartSection.style.minWidth = '600px';
       
       const chartTitle = document.createElement('h3');
       chartTitle.textContent = '12時計分類レーダーチャート';
@@ -504,12 +505,13 @@ export default function MobileInputTabs() {
       if (radarChartElement) {
         const chartContainer = document.createElement('div');
         chartContainer.style.textAlign = 'center';
-        chartContainer.style.padding = '20px';
+        chartContainer.style.padding = '40px';
         chartContainer.style.backgroundColor = '#fafafa';
-        chartContainer.style.borderRadius = '8px';
+        chartContainer.style.borderRadius = '12px';
         chartContainer.style.display = 'flex';
         chartContainer.style.alignItems = 'center';
         chartContainer.style.justifyContent = 'center';
+        chartContainer.style.minHeight = '600px';
         
         // より高解像度でキャプチャ
         const tempCanvas = document.createElement('canvas');
@@ -523,7 +525,7 @@ export default function MobileInputTabs() {
         const chartImage = document.createElement('img');
         chartImage.src = tempCanvas.toDataURL('image/png', 1.0);
         chartImage.style.width = '100%';
-        chartImage.style.maxWidth = '400px';
+        chartImage.style.maxWidth = '800px';
         chartImage.style.height = 'auto';
         chartImage.style.filter = 'grayscale(100%) contrast(1.3)';
         
@@ -541,7 +543,8 @@ export default function MobileInputTabs() {
       
       const categorySection = document.createElement('div');
       categorySection.style.flex = '1';
-      categorySection.style.minWidth = '300px';
+      categorySection.style.minWidth = '350px';
+      categorySection.style.maxWidth = '450px';
       
       const categoryTitle = document.createElement('h3');
       categoryTitle.textContent = 'カテゴリ別集計ランキング';
@@ -675,11 +678,9 @@ export default function MobileInputTabs() {
         // ローディング表示を削除
         summarySection.removeChild(loadingDiv);
         
-        // 2ページ目からAIサマリーを開始
-        const summaryPageBreak = document.createElement('div');
-        summaryPageBreak.style.pageBreakBefore = 'always';
-        summaryPageBreak.style.marginTop = '0';
-        summarySection.appendChild(summaryPageBreak);
+        // AIサマリーの前で確実に改ページ
+        summarySection.style.pageBreakBefore = 'always';
+        summarySection.style.paddingTop = '40px';
         
         // 生成された要約を表示
         summaries.forEach(({ categoryName, summary }) => {
@@ -711,13 +712,10 @@ export default function MobileInputTabs() {
       } else {
         // Daily Report（1-5日目、練習日）の場合はシンプルにLISTを表示
         const listSection = document.createElement('div');
-        listSection.style.marginTop = '0';
         
-        // 2ページ目から記録一覧を開始
-        const pageBreak = document.createElement('div');
-        pageBreak.style.pageBreakBefore = 'always';
-        pageBreak.style.marginTop = '0';
-        listSection.appendChild(pageBreak);
+        // 記録一覧の前で確実に改ページ
+        listSection.style.pageBreakBefore = 'always';
+        listSection.style.paddingTop = '40px';
         
         
         const listTitle = document.createElement('h2');
@@ -817,11 +815,11 @@ export default function MobileInputTabs() {
       
       // html2canvasでキャプチャ
       const canvas = await html2canvas(pdfContent, {
-        scale: 2,
+        scale: 2.5,
         logging: false,
         useCORS: true,
         backgroundColor: '#ffffff',
-        windowWidth: 1200,
+        windowWidth: 1400,
         windowHeight: pdfContent.scrollHeight
       });
       
