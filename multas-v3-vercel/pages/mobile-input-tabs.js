@@ -476,23 +476,27 @@ export default function MobileInputTabs() {
       headerGroup.appendChild(info);
       pdfContent.appendChild(headerGroup);
       
-      // レーダーチャートセクション
-      const chartWrapper = document.createElement('div');
-      chartWrapper.style.pageBreakInside = 'avoid';
-      chartWrapper.style.minHeight = '600px';
+      // レーダーチャートとカテゴリ別集計を横並びに配置するコンテナ
+      const analysisContainer = document.createElement('div');
+      analysisContainer.style.display = 'flex';
+      analysisContainer.style.gap = '40px';
+      analysisContainer.style.marginTop = '40px';
+      analysisContainer.style.marginBottom = '60px';
+      analysisContainer.style.pageBreakInside = 'avoid';
+      analysisContainer.style.minHeight = '500px';
       
+      // レーダーチャートセクション（左側）
       const chartSection = document.createElement('div');
-      chartSection.style.marginTop = '40px';
-      chartSection.style.marginBottom = '60px';
+      chartSection.style.flex = '1';
+      chartSection.style.minWidth = '400px';
       
-      const chartTitle = document.createElement('h2');
+      const chartTitle = document.createElement('h3');
       chartTitle.textContent = '12時計分類レーダーチャート';
       chartTitle.style.textAlign = 'center';
-      chartTitle.style.marginBottom = '60px';
-      chartTitle.style.fontSize = '24px';
+      chartTitle.style.marginBottom = '30px';
+      chartTitle.style.fontSize = '18px';
       chartTitle.style.color = '#000000';
-      chartTitle.style.fontWeight = '400';
-      chartTitle.style.letterSpacing = '1px';
+      chartTitle.style.fontWeight = '500';
       chartSection.appendChild(chartTitle);
       
       // レーダーチャートをキャプチャ
@@ -500,9 +504,9 @@ export default function MobileInputTabs() {
       if (radarChartElement) {
         const chartContainer = document.createElement('div');
         chartContainer.style.textAlign = 'center';
-        chartContainer.style.padding = '60px 40px';
+        chartContainer.style.padding = '20px';
         chartContainer.style.backgroundColor = '#fafafa';
-        chartContainer.style.minHeight = '500px';
+        chartContainer.style.borderRadius = '8px';
         chartContainer.style.display = 'flex';
         chartContainer.style.alignItems = 'center';
         chartContainer.style.justifyContent = 'center';
@@ -519,7 +523,7 @@ export default function MobileInputTabs() {
         const chartImage = document.createElement('img');
         chartImage.src = tempCanvas.toDataURL('image/png', 1.0);
         chartImage.style.width = '100%';
-        chartImage.style.maxWidth = '1000px';
+        chartImage.style.maxWidth = '400px';
         chartImage.style.height = 'auto';
         chartImage.style.filter = 'grayscale(100%) contrast(1.3)';
         
@@ -527,30 +531,24 @@ export default function MobileInputTabs() {
         chartSection.appendChild(chartContainer);
       }
       
-      chartWrapper.appendChild(chartSection);
-      pdfContent.appendChild(chartWrapper);
+      analysisContainer.appendChild(chartSection);
       
-      // カテゴリ別集計（フィルタリングされたデータを使用）
+      // カテゴリ別集計（右側）
       const reportCategoryCounts = {};
       for (let i = 1; i <= 12; i++) {
         reportCategoryCounts[i] = reportPosts.filter(p => p.category === i).length;
       }
       
-      // カテゴリ別集計を包含するラッパー（改ページ制御用）
-      const categoryWrapper = document.createElement('div');
-      categoryWrapper.style.pageBreakInside = 'avoid';
-      categoryWrapper.style.minHeight = '400px';
-      
       const categorySection = document.createElement('div');
-      categorySection.style.marginBottom = '40px';
+      categorySection.style.flex = '1';
+      categorySection.style.minWidth = '300px';
       
-      const categoryTitle = document.createElement('h2');
+      const categoryTitle = document.createElement('h3');
       categoryTitle.textContent = 'カテゴリ別集計ランキング';
-      categoryTitle.style.fontSize = '24px';
+      categoryTitle.style.fontSize = '18px';
       categoryTitle.style.color = '#000000';
-      categoryTitle.style.marginBottom = '40px';
-      categoryTitle.style.fontWeight = '400';
-      categoryTitle.style.letterSpacing = '1px';
+      categoryTitle.style.marginBottom = '30px';
+      categoryTitle.style.fontWeight = '500';
       categoryTitle.style.textAlign = 'center';
       categorySection.appendChild(categoryTitle);
       
@@ -569,7 +567,7 @@ export default function MobileInputTabs() {
           const categoryItem = document.createElement('div');
           categoryItem.style.display = 'flex';
           categoryItem.style.alignItems = 'center';
-          categoryItem.style.padding = '20px 30px';
+          categoryItem.style.padding = '12px 20px';
           categoryItem.style.marginBottom = '0';
           categoryItem.style.backgroundColor = index === 0 ? '#f5f5f5' : '#ffffff';
           categoryItem.style.borderBottom = index < Object.entries(reportCategoryCounts).filter(([, c]) => c > 0).length - 1 ? '1px solid #e0e0e0' : 'none';
@@ -577,22 +575,22 @@ export default function MobileInputTabs() {
           
           const rank = document.createElement('span');
           rank.textContent = `${index + 1}位`;
-          rank.style.fontSize = index === 0 ? '28px' : '20px';
+          rank.style.fontSize = index === 0 ? '18px' : '14px';
           rank.style.fontWeight = index === 0 ? '600' : '400';
           rank.style.color = index === 0 ? '#000000' : '#666666';
-          rank.style.minWidth = '80px';
+          rank.style.minWidth = '50px';
           
           const categoryName = document.createElement('span');
           categoryName.textContent = getCategoryName(cat);
-          categoryName.style.fontSize = index === 0 ? '22px' : '18px';
+          categoryName.style.fontSize = index === 0 ? '16px' : '14px';
           categoryName.style.flex = '1';
-          categoryName.style.marginLeft = '40px';
+          categoryName.style.marginLeft = '15px';
           categoryName.style.fontWeight = index === 0 ? '500' : '400';
           categoryName.style.color = '#333333';
           
           const points = document.createElement('span');
           points.textContent = `${count}pt`;
-          points.style.fontSize = index === 0 ? '28px' : '20px';
+          points.style.fontSize = index === 0 ? '18px' : '14px';
           points.style.fontWeight = index === 0 ? '600' : '500';
           points.style.color = '#000000';
           
@@ -603,8 +601,8 @@ export default function MobileInputTabs() {
         });
       
       categorySection.appendChild(categoryContainer);
-      categoryWrapper.appendChild(categorySection);
-      pdfContent.appendChild(categoryWrapper);
+      analysisContainer.appendChild(categorySection);
+      pdfContent.appendChild(analysisContainer);
       
       
       // Daily Reportの場合はLISTを列挙、全期間の場合はAI生成
@@ -617,12 +615,11 @@ export default function MobileInputTabs() {
         summaryTitle.textContent = '5日間の学習総括';
         summaryTitle.style.fontSize = '28px';
         summaryTitle.style.color = '#000000';
-        summaryTitle.style.marginBottom = '80px';
-        summaryTitle.style.textAlign = 'left';
+        summaryTitle.style.marginTop = '40px';
+        summaryTitle.style.marginBottom = '60px';
+        summaryTitle.style.textAlign = 'center';
         summaryTitle.style.fontWeight = '400';
-        summaryTitle.style.letterSpacing = '1px';
-        summaryTitle.style.borderBottom = '2px solid #000000';
-        summaryTitle.style.paddingBottom = '20px';
+        summaryTitle.style.letterSpacing = '2px';
         summarySection.appendChild(summaryTitle);
         
         // カテゴリ別にグループ化
@@ -678,19 +675,11 @@ export default function MobileInputTabs() {
         // ローディング表示を削除
         summarySection.removeChild(loadingDiv);
         
-        // ビジュアルセパレーター（AIサマリーの場合）
-        const aiSeparator = document.createElement('div');
-        aiSeparator.style.marginBottom = '80px';
-        aiSeparator.style.textAlign = 'center';
-        
-        const aiSeparatorLine = document.createElement('div');
-        aiSeparatorLine.style.height = '2px';
-        aiSeparatorLine.style.backgroundColor = '#333333';
-        aiSeparatorLine.style.margin = '60px auto';
-        aiSeparatorLine.style.width = '200px';
-        aiSeparator.appendChild(aiSeparatorLine);
-        
-        summarySection.appendChild(aiSeparator);
+        // 2ページ目からAIサマリーを開始
+        const summaryPageBreak = document.createElement('div');
+        summaryPageBreak.style.pageBreakBefore = 'always';
+        summaryPageBreak.style.marginTop = '0';
+        summarySection.appendChild(summaryPageBreak);
         
         // 生成された要約を表示
         summaries.forEach(({ categoryName, summary }) => {
@@ -722,45 +711,24 @@ export default function MobileInputTabs() {
       } else {
         // Daily Report（1-5日目、練習日）の場合はシンプルにLISTを表示
         const listSection = document.createElement('div');
-        listSection.style.marginTop = '60px';
+        listSection.style.marginTop = '0';
         
-        // ビジュアルセパレーター
-        const separator = document.createElement('div');
-        separator.style.marginTop = '80px';
-        separator.style.marginBottom = '80px';
-        separator.style.textAlign = 'center';
-        separator.style.position = 'relative';
-        separator.style.pageBreakBefore = 'always';
+        // 2ページ目から記録一覧を開始
+        const pageBreak = document.createElement('div');
+        pageBreak.style.pageBreakBefore = 'always';
+        pageBreak.style.marginTop = '0';
+        listSection.appendChild(pageBreak);
         
-        const separatorLine = document.createElement('div');
-        separatorLine.style.height = '1px';
-        separatorLine.style.backgroundColor = '#e0e0e0';
-        separatorLine.style.margin = '40px 0';
-        separator.appendChild(separatorLine);
-        
-        const separatorDot = document.createElement('div');
-        separatorDot.style.position = 'absolute';
-        separatorDot.style.top = '50%';
-        separatorDot.style.left = '50%';
-        separatorDot.style.transform = 'translate(-50%, -50%)';
-        separatorDot.style.width = '12px';
-        separatorDot.style.height = '12px';
-        separatorDot.style.backgroundColor = '#666666';
-        separatorDot.style.borderRadius = '50%';
-        separator.appendChild(separatorDot);
-        
-        listSection.appendChild(separator);
         
         const listTitle = document.createElement('h2');
         listTitle.textContent = '記録一覧';
         listTitle.style.fontSize = '28px';
         listTitle.style.color = '#000000';
+        listTitle.style.marginTop = '40px';
         listTitle.style.marginBottom = '60px';
-        listTitle.style.textAlign = 'left';
+        listTitle.style.textAlign = 'center';
         listTitle.style.fontWeight = '400';
-        listTitle.style.letterSpacing = '1px';
-        listTitle.style.borderBottom = '2px solid #000000';
-        listTitle.style.paddingBottom = '20px';
+        listTitle.style.letterSpacing = '2px';
         listSection.appendChild(listTitle);
         
         // カテゴリ別にグループ化して表示
