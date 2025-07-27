@@ -413,10 +413,10 @@ export default function MobileInputTabs() {
       
       // PDFに含めるコンテンツを作成
       const pdfContent = document.createElement('div');
-      pdfContent.style.padding = '40px';
+      pdfContent.style.padding = '30px';
       pdfContent.style.backgroundColor = 'white';
       pdfContent.style.fontFamily = '-apple-system, BlinkMacSystemFont, sans-serif';
-      pdfContent.style.maxWidth = '1200px';
+      pdfContent.style.maxWidth = '1000px';
       pdfContent.style.margin = '0 auto';
       
       // タイトル
@@ -459,22 +459,22 @@ export default function MobileInputTabs() {
       // 基本情報
       const info = document.createElement('div');
       info.style.backgroundColor = '#fafafa';
-      info.style.padding = '40px';
+      info.style.padding = '30px';
       info.style.borderRadius = '0';
-      info.style.marginBottom = '100px';
+      info.style.marginBottom = '60px';
       info.style.borderLeft = '4px solid #000000';
+      info.style.pageBreakInside = 'avoid';
       info.innerHTML = `
-        <p style="margin: 0 0 20px 0; font-size: 16px; color: #333333;"><span style="color: #666666;">生成日時</span><br><strong style="font-size: 18px; color: #000000;">${new Date().toLocaleString('ja-JP')}</strong></p>
-        <p style="margin: 0 0 20px 0; font-size: 16px; color: #333333;"><span style="color: #666666;">記録者</span><br><strong style="font-size: 18px; color: #000000;">${currentUser || '未設定'}</strong></p>
+        <p style="margin: 0 0 15px 0; font-size: 16px; color: #333333;"><span style="color: #666666;">生成日時</span><br><strong style="font-size: 18px; color: #000000;">${new Date().toLocaleString('ja-JP')}</strong></p>
+        <p style="margin: 0 0 15px 0; font-size: 16px; color: #333333;"><span style="color: #666666;">記録者</span><br><strong style="font-size: 18px; color: #000000;">${currentUser || '未設定'}</strong></p>
         <p style="margin: 0; font-size: 16px; color: #333333;"><span style="color: #666666;">総記録数</span><br><strong style="font-size: 24px; color: #000000;">${reportPosts.length}</strong><span style="font-size: 16px; color: #666666; margin-left: 4px;">件</span></p>
       `;
       pdfContent.appendChild(info);
       
       // レーダーチャートセクション
       const chartSection = document.createElement('div');
-      chartSection.style.marginTop = '80px';
-      chartSection.style.marginBottom = '120px';
-      chartSection.style.pageBreakAfter = 'avoid';
+      chartSection.style.marginTop = '40px';
+      chartSection.style.marginBottom = '60px';
       chartSection.style.pageBreakInside = 'avoid';
       
       const chartTitle = document.createElement('h2');
@@ -492,9 +492,9 @@ export default function MobileInputTabs() {
       if (radarChartElement) {
         const chartContainer = document.createElement('div');
         chartContainer.style.textAlign = 'center';
-        chartContainer.style.padding = '100px 60px';
+        chartContainer.style.padding = '60px 40px';
         chartContainer.style.backgroundColor = '#fafafa';
-        chartContainer.style.minHeight = '800px';
+        chartContainer.style.minHeight = '500px';
         chartContainer.style.display = 'flex';
         chartContainer.style.alignItems = 'center';
         chartContainer.style.justifyContent = 'center';
@@ -511,7 +511,7 @@ export default function MobileInputTabs() {
         const chartImage = document.createElement('img');
         chartImage.src = tempCanvas.toDataURL('image/png', 1.0);
         chartImage.style.width = '100%';
-        chartImage.style.maxWidth = '1400px';
+        chartImage.style.maxWidth = '1000px';
         chartImage.style.height = 'auto';
         chartImage.style.filter = 'grayscale(100%) contrast(1.3)';
         
@@ -528,7 +528,7 @@ export default function MobileInputTabs() {
       }
       
       const categorySection = document.createElement('div');
-      categorySection.style.marginBottom = '120px';
+      categorySection.style.marginBottom = '40px';
       categorySection.style.pageBreakInside = 'avoid';
       
       const categoryTitle = document.createElement('h2');
@@ -553,10 +553,11 @@ export default function MobileInputTabs() {
           const categoryItem = document.createElement('div');
           categoryItem.style.display = 'flex';
           categoryItem.style.alignItems = 'center';
-          categoryItem.style.padding = '30px 40px';
+          categoryItem.style.padding = '20px 30px';
           categoryItem.style.marginBottom = '0';
           categoryItem.style.backgroundColor = index === 0 ? '#f5f5f5' : '#ffffff';
           categoryItem.style.borderBottom = index < Object.entries(reportCategoryCounts).filter(([, c]) => c > 0).length - 1 ? '1px solid #e0e0e0' : 'none';
+          categoryItem.style.pageBreakInside = 'avoid';
           
           const rank = document.createElement('span');
           rank.textContent = `${index + 1}位`;
@@ -593,8 +594,7 @@ export default function MobileInputTabs() {
       if (reportDate === 'all') {
         // 全期間（1-5日）のレポートの場合のみAI生成
         const summarySection = document.createElement('div');
-        summarySection.style.pageBreakBefore = 'always';
-        summarySection.style.paddingTop = '40px';
+        summarySection.style.marginTop = '60px';
         
         const summaryTitle = document.createElement('h2');
         summaryTitle.textContent = '5日間の学習総括';
@@ -678,10 +678,11 @@ export default function MobileInputTabs() {
         // 生成された要約を表示
         summaries.forEach(({ categoryName, summary }) => {
           const categoryDiv = document.createElement('div');
-          categoryDiv.style.marginBottom = '60px';
-          categoryDiv.style.padding = '40px';
+          categoryDiv.style.marginBottom = '50px';
+          categoryDiv.style.padding = '30px';
           categoryDiv.style.backgroundColor = '#fafafa';
           categoryDiv.style.borderLeft = '3px solid #333333';
+          categoryDiv.style.pageBreakInside = 'avoid';
           
           const categoryTitle = document.createElement('h3');
           categoryTitle.textContent = categoryName;
@@ -704,14 +705,15 @@ export default function MobileInputTabs() {
       } else {
         // Daily Report（1-5日目、練習日）の場合はシンプルにLISTを表示
         const listSection = document.createElement('div');
-        listSection.style.pageBreakBefore = 'always';
-        listSection.style.paddingTop = '40px';
+        listSection.style.marginTop = '60px';
         
         // ビジュアルセパレーター
         const separator = document.createElement('div');
+        separator.style.marginTop = '80px';
         separator.style.marginBottom = '80px';
         separator.style.textAlign = 'center';
         separator.style.position = 'relative';
+        separator.style.pageBreakBefore = 'always';
         
         const separatorLine = document.createElement('div');
         separatorLine.style.height = '1px';
@@ -736,7 +738,7 @@ export default function MobileInputTabs() {
         listTitle.textContent = '記録一覧';
         listTitle.style.fontSize = '28px';
         listTitle.style.color = '#000000';
-        listTitle.style.marginBottom = '80px';
+        listTitle.style.marginBottom = '60px';
         listTitle.style.textAlign = 'left';
         listTitle.style.fontWeight = '400';
         listTitle.style.letterSpacing = '1px';
@@ -756,10 +758,11 @@ export default function MobileInputTabs() {
           .sort(([,a], [,b]) => b.length - a.length)
           .forEach(([category, posts]) => {
             const categoryDiv = document.createElement('div');
-            categoryDiv.style.marginBottom = '80px';
+            categoryDiv.style.marginBottom = '50px';
             categoryDiv.style.backgroundColor = '#fafafa';
-            categoryDiv.style.padding = '40px';
+            categoryDiv.style.padding = '30px';
             categoryDiv.style.borderLeft = '3px solid #666666';
+            categoryDiv.style.pageBreakInside = 'avoid';
             
             const categoryTitle = document.createElement('h3');
             categoryTitle.textContent = `${getCategoryName(category)}`;
@@ -829,11 +832,11 @@ export default function MobileInputTabs() {
       
       // html2canvasでキャプチャ
       const canvas = await html2canvas(pdfContent, {
-        scale: 3,
+        scale: 2,
         logging: false,
         useCORS: true,
         backgroundColor: '#ffffff',
-        windowWidth: 1600,
+        windowWidth: 1200,
         windowHeight: pdfContent.scrollHeight
       });
       
