@@ -25,7 +25,9 @@ export default function MobileInputTabs() {
   const [shareConfirmPost, setShareConfirmPost] = useState(null);
   const [sharedPosts, setSharedPosts] = useState([]);
   const [likedPosts, setLikedPosts] = useState([]);
-  const [reportDate, setReportDate] = useState('all'); // レポート用の日付フィルター
+  const [reportDate, setReportDate] = useState('all');
+  const [userLevel, setUserLevel] = useState(1);
+  const [userExp, setUserExp] = useState(0); // レポート用の日付フィルター
   const mainRef = useRef(null);
   
   const tabs = ['LOG', 'LIST', 'REPORT', 'みんな'];
@@ -55,6 +57,14 @@ export default function MobileInputTabs() {
       // いいねした投稿を読み込み
       const savedLikedPosts = storage.getLikedPosts() || [];
       setLikedPosts(savedLikedPosts);
+      
+      // レベル情報を読み込み
+      const savedLevelData = localStorage.getItem(`user_level_${savedUser.id}`);
+      if (savedLevelData) {
+        const { level, exp } = JSON.parse(savedLevelData);
+        setUserLevel(level);
+        setUserExp(exp);
+      }
     }
   }, []);
   
@@ -87,8 +97,49 @@ export default function MobileInputTabs() {
     const savedLikedPosts = storage.getLikedPosts() || [];
     setLikedPosts(savedLikedPosts);
     
+    // レベル情報を読み込み
+    const savedLevelData = localStorage.getItem(`user_level_${username}`);
+    if (savedLevelData) {
+      const { level, exp } = JSON.parse(savedLevelData);
+      setUserLevel(level);
+      setUserExp(exp);
+    } else {
+      // 新規ユーザーの場合は初期値を設定
+      setUserLevel(1);
+      setUserExp(0);
+    }
+    
     // 最後にログイン画面を非表示にする
     setShowLogin(false);
+  };
+  
+  // レベルシステム関数
+  const calculateExpForLevel = (level) => {
+    return Math.ceil(100 / level);
+  };
+
+  const addExperience = (pointsEarned) => {
+    const expPerPoint = calculateExpForLevel(userLevel);
+    let newExp = userExp + (expPerPoint * pointsEarned);
+    let newLevel = userLevel;
+
+    // レベルアップ処理（繰越なし）
+    while (newExp >= 100) {
+      newExp = 0; // 繰越なし
+      newLevel += 1;
+    }
+
+    setUserExp(newExp);
+    setUserLevel(newLevel);
+
+    // ローカルストレージに保存
+    if (currentUser) {
+      const levelData = {
+        level: newLevel,
+        exp: newExp
+      };
+      localStorage.setItem(`user_level_${currentUser.id || currentUser}`, JSON.stringify(levelData));
+    }
   };
   
   // ログアウト処理
@@ -97,6 +148,8 @@ export default function MobileInputTabs() {
     setCurrentUser(null);
     setShowLogin(true);
     setPosts([]);
+    setUserLevel(1);
+    setUserExp(0);
   };
   
   // シェア処理
@@ -199,10 +252,21 @@ export default function MobileInputTabs() {
       
       // ローカルストレージに保存
       let updatedPosts = [...posts];
+      let elementCount = 0;
       for (const post of postsToAdd) {
         updatedPosts = storage.addPost(post);
+        // 要素分解されたポストのみカウント（オリジナルは除外）
+        if (post.isElement) {
+          elementCount++;
+        }
       }
       setPosts(updatedPosts);
+      
+      // 経験値を加算（要素分解されたポストの数だけ）
+      if (elementCount > 0) {
+        addExperience(elementCount);
+      }
+      
       setText('');
       
       // 最新の投稿が見えるように一番上にスクロール
@@ -349,46 +413,35 @@ export default function MobileInputTabs() {
     return false;
   });
   
+  // 日付マッピング定数
+  const DATE_MAPPINGS = {
+    '1': '2025-07-28',
+    '2': '2025-07-29',
+    '3': '2025-07-30',
+    '4': '2025-07-31',
+    '5': '2025-08-01'
+  };
+
   // REPORTタブ用：日付でフィルタリングされた投稿
   const getFilteredPostsForReport = () => {
-    // 日付の定義
-    const dateMappings = {
-      '1': '2025-07-28',
-      '2': '2025-07-29',
-      '3': '2025-07-30',
-      '4': '2025-07-31',
-      '5': '2025-08-01'
+    const filterByDates = (posts, dates, include = true) => {
+      return posts.filter(post => {
+        if (!post.timestamp) return false;
+        const postDate = new Date(post.timestamp).toISOString().split('T')[0];
+        return include ? dates.includes(postDate) : !dates.includes(postDate);
+      });
     };
+
+    const definedDates = Object.values(DATE_MAPPINGS);
     
     if (reportDate === 'all') {
-      // 全期間: 1-5日目のみ（練習日を除く）
-      const definedDates = Object.values(dateMappings);
-      return displayPosts.filter(post => {
-        if (!post.timestamp) return false;
-        const postDate = new Date(post.timestamp).toISOString().split('T')[0];
-        return definedDates.includes(postDate);
-      });
+      return filterByDates(displayPosts, definedDates, true);
+    } else if (reportDate === 'practice') {
+      return filterByDates(displayPosts, definedDates, false);
+    } else {
+      const targetDate = DATE_MAPPINGS[reportDate];
+      return targetDate ? filterByDates(displayPosts, [targetDate], true) : [];
     }
-    
-    if (reportDate === 'practice') {
-      // 練習日: 定義された日付以外の投稿
-      const definedDates = Object.values(dateMappings);
-      return displayPosts.filter(post => {
-        if (!post.timestamp) return false;
-        const postDate = new Date(post.timestamp).toISOString().split('T')[0];
-        return !definedDates.includes(postDate);
-      });
-    }
-    
-    // 特定の日付の投稿をフィルタリング
-    const targetDate = dateMappings[reportDate];
-    if (!targetDate) return [];
-    
-    return displayPosts.filter(post => {
-      if (!post.timestamp) return false;
-      const postDate = new Date(post.timestamp).toISOString().split('T')[0];
-      return postDate === targetDate;
-    });
   };
   
   const groupedPosts = displayPosts.reduce((acc, post) => {
@@ -405,6 +458,79 @@ export default function MobileInputTabs() {
   }
   
   
+  // PDFスタイルヘルパー関数
+  const createStyledElement = (tag, styles = {}, text = '') => {
+    const element = document.createElement(tag);
+    if (text) element.textContent = text;
+    Object.assign(element.style, styles);
+    return element;
+  };
+
+  const createElementWithChildren = (tag, styles = {}, children = []) => {
+    const element = createStyledElement(tag, styles);
+    children.forEach(child => element.appendChild(child));
+    return element;
+  };
+
+  const pdfStyles = {
+    container: {
+      padding: '60px 80px',
+      backgroundColor: 'white',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN", sans-serif',
+      maxWidth: '1400px',
+      margin: '0 auto',
+      color: '#1a1a1a'
+    },
+    title: {
+      textAlign: 'center',
+      marginBottom: '16px',
+      fontSize: '42px',
+      fontWeight: '300',
+      color: '#1a1a1a',
+      letterSpacing: '8px',
+      textTransform: 'uppercase'
+    },
+    subtitle: {
+      textAlign: 'center',
+      marginBottom: '60px',
+      fontSize: '18px',
+      fontWeight: '400',
+      color: '#666666',
+      letterSpacing: '1px'
+    },
+    sectionTitle: {
+      fontSize: '32px',
+      color: '#1a1a1a',
+      marginTop: '60px',
+      marginBottom: '80px',
+      textAlign: 'center',
+      fontWeight: '300',
+      letterSpacing: '4px'
+    },
+    categoryBox: {
+      marginBottom: '60px',
+      backgroundColor: '#fafafa',
+      padding: '40px',
+      borderRadius: '12px',
+      pageBreakInside: 'avoid'
+    },
+    categoryTitle: {
+      color: '#000000',
+      fontSize: '20px',
+      marginBottom: '30px',
+      fontWeight: '500',
+      letterSpacing: '0.5px'
+    },
+    listItem: {
+      marginBottom: '32px',
+      fontSize: '15px',
+      paddingLeft: '28px',
+      position: 'relative',
+      lineHeight: '1.8',
+      color: '#333333'
+    }
+  };
+
   // PDF生成関数
   const generatePDF = async () => {
     try {
@@ -412,54 +538,31 @@ export default function MobileInputTabs() {
       const reportPosts = getFilteredPostsForReport();
       
       // PDFに含めるコンテンツを作成
-      const pdfContent = document.createElement('div');
-      pdfContent.style.padding = '60px 80px';
-      pdfContent.style.backgroundColor = 'white';
-      pdfContent.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN", sans-serif';
-      pdfContent.style.maxWidth = '1400px';
-      pdfContent.style.margin = '0 auto';
-      pdfContent.style.color = '#1a1a1a';
+      const pdfContent = createStyledElement('div', pdfStyles.container);
       
       // タイトル
-      let dateLabel;
-      if (reportDate === 'all') {
-        dateLabel = '全期間 (1-5日)';
-      } else if (reportDate === 'practice') {
-        dateLabel = '練習日';
-      } else {
-        const dateMap = {
+      const getDateLabel = (date) => {
+        if (date === 'all') return '全期間 (1-5日)';
+        if (date === 'practice') return '練習日';
+        const dateLabels = {
           '1': '1日目 (7/28)',
           '2': '2日目 (7/29)',
           '3': '3日目 (7/30)',
           '4': '4日目 (7/31)',
           '5': '5日目 (8/1)'
         };
-        dateLabel = dateMap[reportDate] || `${reportDate}日目`;
-      }
+        return dateLabels[date] || `${date}日目`;
+      };
+      const dateLabel = getDateLabel(reportDate);
       // タイトルと基本情報を1つのグループにまとめる
       const headerGroup = document.createElement('div');
       headerGroup.style.pageBreakInside = 'avoid';
       headerGroup.style.minHeight = '350px';
       
-      const title = document.createElement('h1');
-      title.textContent = `MULTAs 実習レポート`;
-      title.style.textAlign = 'center';
-      title.style.marginBottom = '16px';
-      title.style.fontSize = '42px';
-      title.style.fontWeight = '300';
-      title.style.color = '#1a1a1a';
-      title.style.letterSpacing = '8px';
-      title.style.textTransform = 'uppercase';
+      const title = createStyledElement('h1', pdfStyles.title, 'MULTAs 実習レポート');
       headerGroup.appendChild(title);
       
-      const subtitle = document.createElement('h2');
-      subtitle.textContent = dateLabel;
-      subtitle.style.textAlign = 'center';
-      subtitle.style.marginBottom = '60px';
-      subtitle.style.fontSize = '18px';
-      subtitle.style.color = '#666666';
-      subtitle.style.fontWeight = '400';
-      subtitle.style.letterSpacing = '2px';
+      const subtitle = createStyledElement('h2', pdfStyles.subtitle, dateLabel);
       headerGroup.appendChild(subtitle);
       
       // 基本情報
@@ -758,26 +861,17 @@ export default function MobileInputTabs() {
         listSection.style.paddingTop = '40px';
         
         
-        const listTitle = document.createElement('h2');
-        listTitle.textContent = '記録一覧';
-        listTitle.style.fontSize = '32px';
-        listTitle.style.color = '#1a1a1a';
-        listTitle.style.marginTop = '60px';
-        listTitle.style.marginBottom = '80px';
-        listTitle.style.textAlign = 'center';
-        listTitle.style.fontWeight = '300';
-        listTitle.style.letterSpacing = '4px';
+        const listTitle = createStyledElement('h2', pdfStyles.sectionTitle, '記録一覧');
         
         // 装飾的な下線
-        const titleUnderline = document.createElement('div');
-        titleUnderline.style.width = '80px';
-        titleUnderline.style.height = '2px';
-        titleUnderline.style.backgroundColor = '#1a1a1a';
-        titleUnderline.style.margin = '20px auto 0';
+        const titleUnderline = createStyledElement('div', {
+          width: '80px',
+          height: '2px',
+          backgroundColor: '#1a1a1a',
+          margin: '20px auto 0'
+        });
         
-        const titleWrapper = document.createElement('div');
-        titleWrapper.appendChild(listTitle);
-        titleWrapper.appendChild(titleUnderline);
+        const titleWrapper = createElementWithChildren('div', {}, [listTitle, titleUnderline]);
         listSection.appendChild(titleWrapper);
         
         // カテゴリ別にグループ化して表示
@@ -791,30 +885,19 @@ export default function MobileInputTabs() {
         Object.entries(groupedByCategory)
           .sort(([,a], [,b]) => b.length - a.length)
           .forEach(([category, posts]) => {
-            const categoryDiv = document.createElement('div');
-            categoryDiv.style.marginBottom = '60px';
-            categoryDiv.style.backgroundColor = '#fafafa';
-            categoryDiv.style.padding = '40px';
-            categoryDiv.style.borderRadius = '12px';
-            categoryDiv.style.pageBreakInside = 'avoid';
+            const categoryDiv = createStyledElement('div', pdfStyles.categoryBox);
             
-            const categoryTitle = document.createElement('h3');
-            categoryTitle.textContent = `${getCategoryName(category)}`;
-            categoryTitle.style.color = '#000000';
-            categoryTitle.style.fontSize = '20px';
-            categoryTitle.style.marginBottom = '30px';
-            categoryTitle.style.fontWeight = '500';
-            categoryTitle.style.letterSpacing = '0.5px';
+            const categoryTitle = createStyledElement('h3', pdfStyles.categoryTitle, getCategoryName(category));
             
-            const countBadge = document.createElement('span');
-            countBadge.textContent = `${posts.length}件`;
-            countBadge.style.backgroundColor = '#e0e0e0';
-            countBadge.style.color = '#333333';
-            countBadge.style.padding = '6px 18px';
-            countBadge.style.borderRadius = '4px';
-            countBadge.style.fontSize = '16px';
-            countBadge.style.marginLeft = '20px';
-            countBadge.style.fontWeight = '400';
+            const countBadge = createStyledElement('span', {
+              backgroundColor: '#e0e0e0',
+              color: '#333333',
+              padding: '6px 18px',
+              borderRadius: '4px',
+              fontSize: '16px',
+              marginLeft: '20px',
+              fontWeight: '400'
+            }, `${posts.length}件`);
             categoryTitle.appendChild(countBadge);
             
             categoryDiv.appendChild(categoryTitle);
@@ -826,13 +909,7 @@ export default function MobileInputTabs() {
             postsList.style.marginTop = '30px';
             
             posts.forEach(post => {
-              const li = document.createElement('li');
-              li.style.marginBottom = '32px';
-              li.style.fontSize = '15px';
-              li.style.paddingLeft = '28px';
-              li.style.position = 'relative';
-              li.style.lineHeight = '1.8';
-              li.style.color = '#333333';
+              const li = createStyledElement('li', pdfStyles.listItem);
               
               const bullet = document.createElement('span');
               bullet.textContent = '◆';
@@ -1344,6 +1421,20 @@ export default function MobileInputTabs() {
             >
               ログアウト
             </button>
+          </div>
+          <div style={styles.levelInfo}>
+            <span style={styles.levelText}>Lv.{userLevel}</span>
+            <div style={styles.expBarContainer}>
+              <div style={styles.expBar}>
+                <div 
+                  style={{
+                    ...styles.expBarFill,
+                    width: `${userExp}%`
+                  }}
+                />
+              </div>
+              <span style={styles.expText}>{userExp}/100</span>
+            </div>
           </div>
         </div>
       </header>
@@ -2071,6 +2162,50 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     gap: '8px'
+  },
+  
+  // レベル表示
+  levelInfo: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    marginTop: '8px'
+  },
+  
+  levelText: {
+    fontSize: '14px',
+    fontWeight: 'bold',
+    color: '#fff',
+    minWidth: '45px'
+  },
+  
+  expBarContainer: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    flex: 1
+  },
+  
+  expBar: {
+    width: '150px',
+    height: '12px',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: '6px',
+    overflow: 'hidden',
+    position: 'relative'
+  },
+  
+  expBarFill: {
+    height: '100%',
+    backgroundColor: '#4CAF50',
+    transition: 'width 0.3s ease',
+    borderRadius: '6px'
+  },
+  
+  expText: {
+    fontSize: '12px',
+    color: 'rgba(255,255,255,0.8)',
+    minWidth: '50px'
   },
   
   daySelector: {
