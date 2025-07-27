@@ -59,7 +59,7 @@ export default function MobileInputTabs() {
       setLikedPosts(savedLikedPosts);
       
       // レベル情報を読み込み
-      const savedLevelData = localStorage.getItem(`user_level_${savedUser.id}`);
+      const savedLevelData = localStorage.getItem(`user_level_${savedUser}`);
       if (savedLevelData) {
         const { level, exp } = JSON.parse(savedLevelData);
         setUserLevel(level);
@@ -138,7 +138,7 @@ export default function MobileInputTabs() {
         level: newLevel,
         exp: newExp
       };
-      localStorage.setItem(`user_level_${currentUser.id || currentUser}`, JSON.stringify(levelData));
+      localStorage.setItem(`user_level_${currentUser}`, JSON.stringify(levelData));
     }
   };
   
@@ -1413,6 +1413,20 @@ export default function MobileInputTabs() {
             <h1 style={styles.title}>MULTAs v3</h1>
             <div style={styles.subtitle}>医学部実習記録システム</div>
           </div>
+          <div style={styles.levelDisplay}>
+            <div style={styles.levelBadge}>Lv.{userLevel}</div>
+            <div style={styles.expBar}>
+              <div 
+                style={{ 
+                  ...styles.expBarInner, 
+                  width: `${userExp}%` 
+                }} 
+              />
+              <div style={styles.expTextOverlay}>
+                {userExp}/100 EXP
+              </div>
+            </div>
+          </div>
           <div style={styles.userInfo}>
             <span style={styles.username}>👤 {currentUser}</span>
             <button 
@@ -1422,22 +1436,9 @@ export default function MobileInputTabs() {
               ログアウト
             </button>
           </div>
-          <div style={styles.levelInfo}>
-            <span style={styles.levelText}>Lv.{userLevel}</span>
-            <div style={styles.expBarContainer}>
-              <div style={styles.expBar}>
-                <div 
-                  style={{
-                    ...styles.expBarFill,
-                    width: `${userExp}%`
-                  }}
-                />
-              </div>
-              <span style={styles.expText}>{userExp}/100</span>
-            </div>
-          </div>
         </div>
       </header>
+
 
       {/* タブナビゲーション */}
       <nav style={styles.tabNav}>
@@ -1509,7 +1510,7 @@ const styles = {
     top: 0,
     left: 0,
     right: 0,
-    zIndex: 100,
+    zIndex: 9999,
     padding: '15px 20px',
     boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
   },
@@ -1519,7 +1520,8 @@ const styles = {
     justifyContent: 'space-between',
     alignItems: 'center',
     maxWidth: '800px',
-    margin: '0 auto'
+    margin: '0 auto',
+    gap: '20px'
   },
   
   title: {
@@ -1565,7 +1567,7 @@ const styles = {
   
   main: {
     flex: 1,
-    marginTop: '140px', // ヘッダー + タブ分
+    marginTop: '140px', // ヘッダー + レベル表示 + タブ分
     marginBottom: '140px',
     padding: '20px',
     paddingTop: '10px',
@@ -2164,48 +2166,49 @@ const styles = {
     gap: '8px'
   },
   
-  // レベル表示
-  levelInfo: {
+  // レベル表示セクション
+  // レベル・経験値表示用スタイル
+  levelDisplay: {
     display: 'flex',
+    flexDirection: 'column',
     alignItems: 'center',
-    gap: '12px',
-    marginTop: '8px'
+    gap: '5px'
   },
   
-  levelText: {
-    fontSize: '14px',
-    fontWeight: 'bold',
-    color: '#fff',
-    minWidth: '45px'
-  },
-  
-  expBarContainer: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    flex: 1
+  levelBadge: {
+    backgroundColor: '#FFD700',
+    color: '#333',
+    padding: '4px 12px',
+    borderRadius: '20px',
+    fontSize: '16px',
+    fontWeight: 'bold'
   },
   
   expBar: {
-    width: '150px',
-    height: '12px',
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: '6px',
-    overflow: 'hidden',
-    position: 'relative'
+    width: '120px',
+    height: '20px',
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: '10px',
+    position: 'relative',
+    overflow: 'hidden'
   },
   
-  expBarFill: {
+  expBarInner: {
     height: '100%',
     backgroundColor: '#4CAF50',
-    transition: 'width 0.3s ease',
-    borderRadius: '6px'
+    borderRadius: '10px',
+    transition: 'width 0.5s ease'
   },
   
-  expText: {
-    fontSize: '12px',
-    color: 'rgba(255,255,255,0.8)',
-    minWidth: '50px'
+  expTextOverlay: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    transform: 'translate(-50%, -50%)',
+    fontSize: '11px',
+    fontWeight: 'bold',
+    color: 'white',
+    textShadow: '1px 1px 2px rgba(0,0,0,0.5)'
   },
   
   daySelector: {
