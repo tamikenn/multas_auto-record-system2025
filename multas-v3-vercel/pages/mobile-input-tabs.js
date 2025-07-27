@@ -435,6 +435,11 @@ export default function MobileInputTabs() {
         };
         dateLabel = dateMap[reportDate] || `${reportDate}日目`;
       }
+      // タイトルと基本情報を1つのグループにまとめる
+      const headerGroup = document.createElement('div');
+      headerGroup.style.pageBreakInside = 'avoid';
+      headerGroup.style.minHeight = '350px';
+      
       const title = document.createElement('h1');
       title.textContent = `MULTAs 実習レポート`;
       title.style.textAlign = 'center';
@@ -444,7 +449,7 @@ export default function MobileInputTabs() {
       title.style.color = '#000000';
       title.style.letterSpacing = '4px';
       title.style.textTransform = 'uppercase';
-      pdfContent.appendChild(title);
+      headerGroup.appendChild(title);
       
       const subtitle = document.createElement('h2');
       subtitle.textContent = dateLabel;
@@ -454,7 +459,7 @@ export default function MobileInputTabs() {
       subtitle.style.color = '#666666';
       subtitle.style.fontWeight = '400';
       subtitle.style.letterSpacing = '1px';
-      pdfContent.appendChild(subtitle);
+      headerGroup.appendChild(subtitle);
       
       // 基本情報
       const info = document.createElement('div');
@@ -463,24 +468,27 @@ export default function MobileInputTabs() {
       info.style.borderRadius = '0';
       info.style.marginBottom = '60px';
       info.style.borderLeft = '4px solid #000000';
-      info.style.pageBreakInside = 'avoid';
       info.innerHTML = `
         <p style="margin: 0 0 15px 0; font-size: 16px; color: #333333;"><span style="color: #666666;">生成日時</span><br><strong style="font-size: 18px; color: #000000;">${new Date().toLocaleString('ja-JP')}</strong></p>
         <p style="margin: 0 0 15px 0; font-size: 16px; color: #333333;"><span style="color: #666666;">記録者</span><br><strong style="font-size: 18px; color: #000000;">${currentUser || '未設定'}</strong></p>
         <p style="margin: 0; font-size: 16px; color: #333333;"><span style="color: #666666;">総記録数</span><br><strong style="font-size: 24px; color: #000000;">${reportPosts.length}</strong><span style="font-size: 16px; color: #666666; margin-left: 4px;">件</span></p>
       `;
-      pdfContent.appendChild(info);
+      headerGroup.appendChild(info);
+      pdfContent.appendChild(headerGroup);
       
       // レーダーチャートセクション
+      const chartWrapper = document.createElement('div');
+      chartWrapper.style.pageBreakInside = 'avoid';
+      chartWrapper.style.minHeight = '600px';
+      
       const chartSection = document.createElement('div');
       chartSection.style.marginTop = '40px';
       chartSection.style.marginBottom = '60px';
-      chartSection.style.pageBreakInside = 'avoid';
       
       const chartTitle = document.createElement('h2');
       chartTitle.textContent = '12時計分類レーダーチャート';
       chartTitle.style.textAlign = 'center';
-      chartTitle.style.marginBottom = '80px';
+      chartTitle.style.marginBottom = '60px';
       chartTitle.style.fontSize = '24px';
       chartTitle.style.color = '#000000';
       chartTitle.style.fontWeight = '400';
@@ -519,7 +527,8 @@ export default function MobileInputTabs() {
         chartSection.appendChild(chartContainer);
       }
       
-      pdfContent.appendChild(chartSection);
+      chartWrapper.appendChild(chartSection);
+      pdfContent.appendChild(chartWrapper);
       
       // カテゴリ別集計（フィルタリングされたデータを使用）
       const reportCategoryCounts = {};
@@ -527,15 +536,19 @@ export default function MobileInputTabs() {
         reportCategoryCounts[i] = reportPosts.filter(p => p.category === i).length;
       }
       
+      // カテゴリ別集計を包含するラッパー（改ページ制御用）
+      const categoryWrapper = document.createElement('div');
+      categoryWrapper.style.pageBreakInside = 'avoid';
+      categoryWrapper.style.minHeight = '400px';
+      
       const categorySection = document.createElement('div');
       categorySection.style.marginBottom = '40px';
-      categorySection.style.pageBreakInside = 'avoid';
       
       const categoryTitle = document.createElement('h2');
       categoryTitle.textContent = 'カテゴリ別集計ランキング';
       categoryTitle.style.fontSize = '24px';
       categoryTitle.style.color = '#000000';
-      categoryTitle.style.marginBottom = '60px';
+      categoryTitle.style.marginBottom = '40px';
       categoryTitle.style.fontWeight = '400';
       categoryTitle.style.letterSpacing = '1px';
       categoryTitle.style.textAlign = 'center';
@@ -544,6 +557,9 @@ export default function MobileInputTabs() {
       const categoryContainer = document.createElement('div');
       categoryContainer.style.backgroundColor = '#ffffff';
       categoryContainer.style.padding = '0';
+      categoryContainer.style.border = '1px solid #e0e0e0';
+      categoryContainer.style.borderRadius = '8px';
+      categoryContainer.style.overflow = 'hidden';
       
       // ポイント順でソートして表示
       Object.entries(reportCategoryCounts)
@@ -587,7 +603,8 @@ export default function MobileInputTabs() {
         });
       
       categorySection.appendChild(categoryContainer);
-      pdfContent.appendChild(categorySection);
+      categoryWrapper.appendChild(categorySection);
+      pdfContent.appendChild(categoryWrapper);
       
       
       // Daily Reportの場合はLISTを列挙、全期間の場合はAI生成
