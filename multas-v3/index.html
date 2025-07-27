@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MULTAs v3</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="app">
+        <h1>MULTAs v3 - Phase 0</h1>
+        
+        <div id="storage-test">
+            <h2>LocalStorage テスト</h2>
+            <input type="text" id="test-input" placeholder="テストデータを入力">
+            <button onclick="testSave()">保存</button>
+            <button onclick="testLoad()">読み込み</button>
+            <button onclick="testClear()">クリア</button>
+            <div id="test-output"></div>
+        </div>
+
+        <div id="mobile-test">
+            <h2>モバイル表示テスト</h2>
+            <p>画面幅: <span id="screen-width"></span>px</p>
+            <p>User Agent: <span id="user-agent"></span></p>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

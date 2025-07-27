@@ -439,10 +439,11 @@ export default function MobileInputTabs() {
       title.textContent = `MULTAs 実習レポート`;
       title.style.textAlign = 'center';
       title.style.marginBottom = '20px';
-      title.style.fontSize = '42px';
-      title.style.fontWeight = '300';
+      title.style.fontSize = '48px';
+      title.style.fontWeight = '200';
       title.style.color = '#000000';
-      title.style.letterSpacing = '2px';
+      title.style.letterSpacing = '4px';
+      title.style.textTransform = 'uppercase';
       pdfContent.appendChild(title);
       
       const subtitle = document.createElement('h2');
@@ -491,21 +492,28 @@ export default function MobileInputTabs() {
       if (radarChartElement) {
         const chartContainer = document.createElement('div');
         chartContainer.style.textAlign = 'center';
-        chartContainer.style.padding = '80px 40px';
+        chartContainer.style.padding = '100px 60px';
         chartContainer.style.backgroundColor = '#fafafa';
-        chartContainer.style.minHeight = '700px';
+        chartContainer.style.minHeight = '800px';
         chartContainer.style.display = 'flex';
         chartContainer.style.alignItems = 'center';
         chartContainer.style.justifyContent = 'center';
         
+        // より高解像度でキャプチャ
+        const tempCanvas = document.createElement('canvas');
+        const scale = 4; // 高解像度スケール
+        tempCanvas.width = radarChartElement.width * scale;
+        tempCanvas.height = radarChartElement.height * scale;
+        const ctx = tempCanvas.getContext('2d');
+        ctx.scale(scale, scale);
+        ctx.drawImage(radarChartElement, 0, 0);
+        
         const chartImage = document.createElement('img');
-        chartImage.src = radarChartElement.toDataURL();
+        chartImage.src = tempCanvas.toDataURL('image/png', 1.0);
         chartImage.style.width = '100%';
-        chartImage.style.maxWidth = '1200px';
+        chartImage.style.maxWidth = '1400px';
         chartImage.style.height = 'auto';
-        chartImage.style.minHeight = '600px';
-        chartImage.style.objectFit = 'contain';
-        chartImage.style.filter = 'grayscale(100%) contrast(1.2)';
+        chartImage.style.filter = 'grayscale(100%) contrast(1.3)';
         
         chartContainer.appendChild(chartImage);
         chartSection.appendChild(chartContainer);
@@ -821,11 +829,11 @@ export default function MobileInputTabs() {
       
       // html2canvasでキャプチャ
       const canvas = await html2canvas(pdfContent, {
-        scale: 2.5,
+        scale: 3,
         logging: false,
         useCORS: true,
         backgroundColor: '#ffffff',
-        windowWidth: 1400,
+        windowWidth: 1600,
         windowHeight: pdfContent.scrollHeight
       });
       
