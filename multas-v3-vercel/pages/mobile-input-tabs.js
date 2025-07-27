@@ -413,11 +413,12 @@ export default function MobileInputTabs() {
       
       // PDFに含めるコンテンツを作成
       const pdfContent = document.createElement('div');
-      pdfContent.style.padding = '40px';
+      pdfContent.style.padding = '60px 80px';
       pdfContent.style.backgroundColor = 'white';
-      pdfContent.style.fontFamily = '-apple-system, BlinkMacSystemFont, sans-serif';
-      pdfContent.style.maxWidth = '1200px';
+      pdfContent.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN", sans-serif';
+      pdfContent.style.maxWidth = '1400px';
       pdfContent.style.margin = '0 auto';
+      pdfContent.style.color = '#1a1a1a';
       
       // タイトル
       let dateLabel;
@@ -443,61 +444,95 @@ export default function MobileInputTabs() {
       const title = document.createElement('h1');
       title.textContent = `MULTAs 実習レポート`;
       title.style.textAlign = 'center';
-      title.style.marginBottom = '20px';
-      title.style.fontSize = '48px';
-      title.style.fontWeight = '200';
-      title.style.color = '#000000';
-      title.style.letterSpacing = '4px';
+      title.style.marginBottom = '16px';
+      title.style.fontSize = '42px';
+      title.style.fontWeight = '300';
+      title.style.color = '#1a1a1a';
+      title.style.letterSpacing = '8px';
       title.style.textTransform = 'uppercase';
       headerGroup.appendChild(title);
       
       const subtitle = document.createElement('h2');
       subtitle.textContent = dateLabel;
       subtitle.style.textAlign = 'center';
-      subtitle.style.marginBottom = '80px';
-      subtitle.style.fontSize = '20px';
+      subtitle.style.marginBottom = '60px';
+      subtitle.style.fontSize = '18px';
       subtitle.style.color = '#666666';
       subtitle.style.fontWeight = '400';
-      subtitle.style.letterSpacing = '1px';
+      subtitle.style.letterSpacing = '2px';
       headerGroup.appendChild(subtitle);
       
       // 基本情報
       const info = document.createElement('div');
-      info.style.backgroundColor = '#fafafa';
-      info.style.padding = '30px';
-      info.style.borderRadius = '0';
-      info.style.marginBottom = '60px';
-      info.style.borderLeft = '4px solid #000000';
-      info.innerHTML = `
-        <p style="margin: 0 0 15px 0; font-size: 16px; color: #333333;"><span style="color: #666666;">生成日時</span><br><strong style="font-size: 18px; color: #000000;">${new Date().toLocaleString('ja-JP')}</strong></p>
-        <p style="margin: 0 0 15px 0; font-size: 16px; color: #333333;"><span style="color: #666666;">記録者</span><br><strong style="font-size: 18px; color: #000000;">${currentUser || '未設定'}</strong></p>
-        <p style="margin: 0; font-size: 16px; color: #333333;"><span style="color: #666666;">総記録数</span><br><strong style="font-size: 24px; color: #000000;">${reportPosts.length}</strong><span style="font-size: 16px; color: #666666; margin-left: 4px;">件</span></p>
-      `;
+      info.style.display = 'flex';
+      info.style.justifyContent = 'center';
+      info.style.gap = '80px';
+      info.style.marginBottom = '80px';
+      info.style.borderTop = '1px solid #e0e0e0';
+      info.style.borderBottom = '1px solid #e0e0e0';
+      info.style.padding = '30px 0';
+      
+      const infoItems = [
+        { label: '生成日時', value: new Date().toLocaleString('ja-JP'), isDate: true },
+        { label: '記録者', value: currentUser || '未設定', isDate: false },
+        { label: '総記録数', value: reportPosts.length, isCount: true }
+      ];
+      
+      infoItems.forEach(item => {
+        const infoItem = document.createElement('div');
+        infoItem.style.textAlign = 'center';
+        
+        const label = document.createElement('div');
+        label.textContent = item.label;
+        label.style.fontSize = '14px';
+        label.style.color = '#888888';
+        label.style.marginBottom = '8px';
+        label.style.fontWeight = '500';
+        label.style.letterSpacing = '1px';
+        
+        const value = document.createElement('div');
+        value.textContent = item.isCount ? `${item.value} 件` : item.value;
+        value.style.fontSize = item.isCount ? '28px' : '16px';
+        value.style.color = '#1a1a1a';
+        value.style.fontWeight = item.isCount ? '600' : '400';
+        
+        infoItem.appendChild(label);
+        infoItem.appendChild(value);
+        info.appendChild(infoItem);
+      });
+      
       headerGroup.appendChild(info);
       pdfContent.appendChild(headerGroup);
       
-      // レーダーチャートとカテゴリ別集計を横並びに配置するコンテナ
+      // レーダーチャートとカテゴリ別集計を中央に配置
+      const analysisWrapper = document.createElement('div');
+      analysisWrapper.style.display = 'flex';
+      analysisWrapper.style.justifyContent = 'center';
+      analysisWrapper.style.marginTop = '20px';
+      analysisWrapper.style.marginBottom = '60px';
+      analysisWrapper.style.pageBreakInside = 'avoid';
+      
       const analysisContainer = document.createElement('div');
       analysisContainer.style.display = 'flex';
-      analysisContainer.style.gap = '60px';
-      analysisContainer.style.marginTop = '40px';
-      analysisContainer.style.marginBottom = '80px';
-      analysisContainer.style.pageBreakInside = 'avoid';
-      analysisContainer.style.minHeight = '700px';
-      analysisContainer.style.alignItems = 'flex-start';
+      analysisContainer.style.gap = '80px';
+      analysisContainer.style.maxWidth = '1200px';
+      analysisContainer.style.width = '100%';
+      analysisContainer.style.alignItems = 'stretch';
       
       // レーダーチャートセクション（左側）
       const chartSection = document.createElement('div');
-      chartSection.style.flex = '1.5';
-      chartSection.style.minWidth = '600px';
+      chartSection.style.flex = '1.2';
+      chartSection.style.display = 'flex';
+      chartSection.style.flexDirection = 'column';
       
       const chartTitle = document.createElement('h3');
       chartTitle.textContent = '12時計分類レーダーチャート';
       chartTitle.style.textAlign = 'center';
-      chartTitle.style.marginBottom = '30px';
-      chartTitle.style.fontSize = '18px';
-      chartTitle.style.color = '#000000';
-      chartTitle.style.fontWeight = '500';
+      chartTitle.style.marginBottom = '40px';
+      chartTitle.style.fontSize = '20px';
+      chartTitle.style.color = '#1a1a1a';
+      chartTitle.style.fontWeight = '400';
+      chartTitle.style.letterSpacing = '2px';
       chartSection.appendChild(chartTitle);
       
       // レーダーチャートをキャプチャ
@@ -505,13 +540,14 @@ export default function MobileInputTabs() {
       if (radarChartElement) {
         const chartContainer = document.createElement('div');
         chartContainer.style.textAlign = 'center';
-        chartContainer.style.padding = '40px';
+        chartContainer.style.padding = '60px';
         chartContainer.style.backgroundColor = '#fafafa';
-        chartContainer.style.borderRadius = '12px';
+        chartContainer.style.borderRadius = '16px';
         chartContainer.style.display = 'flex';
         chartContainer.style.alignItems = 'center';
         chartContainer.style.justifyContent = 'center';
         chartContainer.style.minHeight = '600px';
+        chartContainer.style.border = '1px solid #f0f0f0';
         
         // より高解像度でキャプチャ
         const tempCanvas = document.createElement('canvas');
@@ -525,9 +561,9 @@ export default function MobileInputTabs() {
         const chartImage = document.createElement('img');
         chartImage.src = tempCanvas.toDataURL('image/png', 1.0);
         chartImage.style.width = '100%';
-        chartImage.style.maxWidth = '800px';
+        chartImage.style.maxWidth = '600px';
         chartImage.style.height = 'auto';
-        chartImage.style.filter = 'grayscale(100%) contrast(1.3)';
+        chartImage.style.filter = 'grayscale(90%) contrast(1.2) brightness(1.05)';
         
         chartContainer.appendChild(chartImage);
         chartSection.appendChild(chartContainer);
@@ -543,24 +579,26 @@ export default function MobileInputTabs() {
       
       const categorySection = document.createElement('div');
       categorySection.style.flex = '1';
-      categorySection.style.minWidth = '350px';
-      categorySection.style.maxWidth = '450px';
+      categorySection.style.display = 'flex';
+      categorySection.style.flexDirection = 'column';
       
       const categoryTitle = document.createElement('h3');
       categoryTitle.textContent = 'カテゴリ別集計ランキング';
-      categoryTitle.style.fontSize = '18px';
-      categoryTitle.style.color = '#000000';
-      categoryTitle.style.marginBottom = '30px';
-      categoryTitle.style.fontWeight = '500';
+      categoryTitle.style.fontSize = '20px';
+      categoryTitle.style.color = '#1a1a1a';
+      categoryTitle.style.marginBottom = '40px';
+      categoryTitle.style.fontWeight = '400';
       categoryTitle.style.textAlign = 'center';
+      categoryTitle.style.letterSpacing = '2px';
       categorySection.appendChild(categoryTitle);
       
       const categoryContainer = document.createElement('div');
       categoryContainer.style.backgroundColor = '#ffffff';
       categoryContainer.style.padding = '0';
-      categoryContainer.style.border = '1px solid #e0e0e0';
-      categoryContainer.style.borderRadius = '8px';
+      categoryContainer.style.border = '1px solid #f0f0f0';
+      categoryContainer.style.borderRadius = '16px';
       categoryContainer.style.overflow = 'hidden';
+      categoryContainer.style.flex = '1';
       
       // ポイント順でソートして表示
       Object.entries(reportCategoryCounts)
@@ -570,32 +608,33 @@ export default function MobileInputTabs() {
           const categoryItem = document.createElement('div');
           categoryItem.style.display = 'flex';
           categoryItem.style.alignItems = 'center';
-          categoryItem.style.padding = '12px 20px';
+          categoryItem.style.padding = '16px 24px';
           categoryItem.style.marginBottom = '0';
-          categoryItem.style.backgroundColor = index === 0 ? '#f5f5f5' : '#ffffff';
-          categoryItem.style.borderBottom = index < Object.entries(reportCategoryCounts).filter(([, c]) => c > 0).length - 1 ? '1px solid #e0e0e0' : 'none';
-          categoryItem.style.pageBreakInside = 'avoid';
+          categoryItem.style.backgroundColor = index === 0 ? '#f8f8f8' : '#ffffff';
+          categoryItem.style.borderBottom = index < Object.entries(reportCategoryCounts).filter(([, c]) => c > 0).length - 1 ? '1px solid #f0f0f0' : 'none';
+          categoryItem.style.transition = 'background-color 0.2s ease';
           
           const rank = document.createElement('span');
           rank.textContent = `${index + 1}位`;
-          rank.style.fontSize = index === 0 ? '18px' : '14px';
+          rank.style.fontSize = index === 0 ? '20px' : '16px';
           rank.style.fontWeight = index === 0 ? '600' : '400';
-          rank.style.color = index === 0 ? '#000000' : '#666666';
-          rank.style.minWidth = '50px';
+          rank.style.color = index === 0 ? '#1a1a1a' : '#666666';
+          rank.style.minWidth = '60px';
+          rank.style.textAlign = 'center';
           
           const categoryName = document.createElement('span');
           categoryName.textContent = getCategoryName(cat);
-          categoryName.style.fontSize = index === 0 ? '16px' : '14px';
+          categoryName.style.fontSize = index === 0 ? '18px' : '16px';
           categoryName.style.flex = '1';
-          categoryName.style.marginLeft = '15px';
+          categoryName.style.marginLeft = '20px';
           categoryName.style.fontWeight = index === 0 ? '500' : '400';
           categoryName.style.color = '#333333';
           
           const points = document.createElement('span');
           points.textContent = `${count}pt`;
-          points.style.fontSize = index === 0 ? '18px' : '14px';
+          points.style.fontSize = index === 0 ? '20px' : '16px';
           points.style.fontWeight = index === 0 ? '600' : '500';
-          points.style.color = '#000000';
+          points.style.color = '#1a1a1a';
           
           categoryItem.appendChild(rank);
           categoryItem.appendChild(categoryName);
@@ -605,7 +644,8 @@ export default function MobileInputTabs() {
       
       categorySection.appendChild(categoryContainer);
       analysisContainer.appendChild(categorySection);
-      pdfContent.appendChild(analysisContainer);
+      analysisWrapper.appendChild(analysisContainer);
+      pdfContent.appendChild(analysisWrapper);
       
       
       // Daily Reportの場合はLISTを列挙、全期間の場合はAI生成
@@ -720,14 +760,25 @@ export default function MobileInputTabs() {
         
         const listTitle = document.createElement('h2');
         listTitle.textContent = '記録一覧';
-        listTitle.style.fontSize = '28px';
-        listTitle.style.color = '#000000';
-        listTitle.style.marginTop = '40px';
-        listTitle.style.marginBottom = '60px';
+        listTitle.style.fontSize = '32px';
+        listTitle.style.color = '#1a1a1a';
+        listTitle.style.marginTop = '60px';
+        listTitle.style.marginBottom = '80px';
         listTitle.style.textAlign = 'center';
-        listTitle.style.fontWeight = '400';
-        listTitle.style.letterSpacing = '2px';
-        listSection.appendChild(listTitle);
+        listTitle.style.fontWeight = '300';
+        listTitle.style.letterSpacing = '4px';
+        
+        // 装飾的な下線
+        const titleUnderline = document.createElement('div');
+        titleUnderline.style.width = '80px';
+        titleUnderline.style.height = '2px';
+        titleUnderline.style.backgroundColor = '#1a1a1a';
+        titleUnderline.style.margin = '20px auto 0';
+        
+        const titleWrapper = document.createElement('div');
+        titleWrapper.appendChild(listTitle);
+        titleWrapper.appendChild(titleUnderline);
+        listSection.appendChild(titleWrapper);
         
         // カテゴリ別にグループ化して表示
         const groupedByCategory = reportPosts.reduce((acc, post) => {
@@ -741,10 +792,10 @@ export default function MobileInputTabs() {
           .sort(([,a], [,b]) => b.length - a.length)
           .forEach(([category, posts]) => {
             const categoryDiv = document.createElement('div');
-            categoryDiv.style.marginBottom = '50px';
+            categoryDiv.style.marginBottom = '60px';
             categoryDiv.style.backgroundColor = '#fafafa';
-            categoryDiv.style.padding = '30px';
-            categoryDiv.style.borderLeft = '3px solid #666666';
+            categoryDiv.style.padding = '40px';
+            categoryDiv.style.borderRadius = '12px';
             categoryDiv.style.pageBreakInside = 'avoid';
             
             const categoryTitle = document.createElement('h3');
@@ -776,16 +827,20 @@ export default function MobileInputTabs() {
             
             posts.forEach(post => {
               const li = document.createElement('li');
-              li.style.marginBottom = '24px';
-              li.style.fontSize = '16px';
-              li.style.paddingLeft = '20px';
+              li.style.marginBottom = '32px';
+              li.style.fontSize = '15px';
+              li.style.paddingLeft = '28px';
               li.style.position = 'relative';
+              li.style.lineHeight = '1.8';
+              li.style.color = '#333333';
               
               const bullet = document.createElement('span');
-              bullet.textContent = '▪';
+              bullet.textContent = '◆';
               bullet.style.position = 'absolute';
               bullet.style.left = '0';
-              bullet.style.color = '#999999';
+              bullet.style.top = '4px';
+              bullet.style.color = '#d0d0d0';
+              bullet.style.fontSize = '10px';
               li.appendChild(bullet);
               
               const postText = document.createElement('span');
@@ -794,9 +849,10 @@ export default function MobileInputTabs() {
               
               const timestamp = document.createElement('span');
               timestamp.textContent = ` (${post.timestamp})`;
-              timestamp.style.color = '#999999';
-              timestamp.style.fontSize = '14px';
+              timestamp.style.color = '#aaaaaa';
+              timestamp.style.fontSize = '13px';
               timestamp.style.marginLeft = '12px';
+              timestamp.style.fontStyle = 'italic';
               
               li.appendChild(postText);
               li.appendChild(timestamp);
@@ -815,11 +871,11 @@ export default function MobileInputTabs() {
       
       // html2canvasでキャプチャ
       const canvas = await html2canvas(pdfContent, {
-        scale: 2.5,
+        scale: 3,
         logging: false,
         useCORS: true,
         backgroundColor: '#ffffff',
-        windowWidth: 1400,
+        windowWidth: 1600,
         windowHeight: pdfContent.scrollHeight
       });
       
