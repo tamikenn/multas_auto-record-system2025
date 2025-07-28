@@ -71,13 +71,24 @@ export default function MobileInputTabs() {
   }, []);
   
   // ログイン処理
-  const handleLogin = () => {
+  const handleLogin = async () => {
     if (!loginName.trim()) return;
     
     const username = loginName.trim();
     storage.setCurrentUser(username);
     setCurrentUser(username);
     setLoginName('');
+    
+    // ログインを記録
+    try {
+      await fetch('/api/track-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userName: username, action: 'login' })
+      });
+    } catch (error) {
+      console.error('Error tracking login:', error);
+    }
     
     // ユーザー別の投稿データを読み込み
     const savedPosts = storage.loadPosts();
@@ -115,7 +126,20 @@ export default function MobileInputTabs() {
   };
   
   // ログアウト処理
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    const username = currentUser;
+    
+    // ログアウトを記録
+    try {
+      await fetch('/api/track-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userName: username, action: 'logout' })
+      });
+    } catch (error) {
+      console.error('Error tracking logout:', error);
+    }
+    
     storage.clearCurrentUser();
     setCurrentUser(null);
     setShowLogin(true);
