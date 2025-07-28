@@ -27,9 +27,26 @@ export default function MobileInputTabs() {
   const [sharedPosts, setSharedPosts] = useState([]);
   const [likedPosts, setLikedPosts] = useState([]);
   const [reportDate, setReportDate] = useState('all'); // レポート用の日付フィルター
+  const [syncStatus, setSyncStatus] = useState(null); // 同期状態
   const mainRef = useRef(null);
   
   const tabs = ['LOG', 'LIST', 'REPORT', 'みんな'];
+  
+  // オンライン復帰時の自動同期
+  useEffect(() => {
+    if (!currentUser || !posts) return;
+    
+    const handleOnline = () => {
+      console.log('オンラインに復帰しました');
+      // 自動同期を実行
+      if (posts.some(p => !p.synced)) {
+        syncLocalToServer();
+      }
+    };
+    
+    window.addEventListener('online', handleOnline);
+    return () => window.removeEventListener('online', handleOnline);
+  }, [posts, currentUser]);
 
   // 初回読み込み時にローカルストレージからデータを復元
   useEffect(() => {
@@ -182,6 +199,65 @@ export default function MobileInputTabs() {
     }
     
     setShareConfirmPost(null);
+  };
+  
+  // LocalStorageの投稿をサーバーに同期
+  const syncLocalToServer = async () => {
+    setSyncStatus('同期中...');
+    
+    try {
+      // LocalStorageから未同期の投稿を取得
+      const localPosts = posts || [];
+      let syncCount = 0;
+      let errorCount = 0;
+      
+      for (const post of localPosts) {
+        // サーバーに未送信の投稿を送信
+        if (!post.synced) {
+          try {
+            const response = await fetch('/api/save-post', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                text: post.text,
+                category: post.category,
+                reason: post.reason,
+                userName: post.userName || currentUser
+              })
+            });
+            
+            if (response.ok) {
+              // 同期成功フラグを設定
+              post.synced = true;
+              syncCount++;
+            } else {
+              errorCount++;
+            }
+          } catch (error) {
+            console.error('Sync error for post:', error);
+            errorCount++;
+          }
+        }
+      }
+      
+      // LocalStorageを更新
+      storage.savePosts(posts, currentUser);
+      
+      // 結果を表示
+      if (syncCount > 0 || errorCount > 0) {
+        setSyncStatus(`同期完了: ${syncCount}件成功${errorCount > 0 ? `, ${errorCount}件失敗` : ''}`);
+      } else {
+        setSyncStatus('同期済みの投稿のみです');
+      }
+      
+      // 3秒後にメッセージを消去
+      setTimeout(() => setSyncStatus(null), 3000);
+      
+    } catch (error) {
+      console.error('Sync error:', error);
+      setSyncStatus('同期エラーが発生しました');
+      setTimeout(() => setSyncStatus(null), 3000);
+    }
   };
   
   // いいね処理
@@ -1483,6 +1559,24 @@ export default function MobileInputTabs() {
 
       {/* タブコンテンツ */}
       {renderTabContent()}
+      
+      {/* 同期ボタン（LOGタブのみ） */}
+      {activeTab === 'LOG' && (
+        <div style={styles.syncButtonContainer}>
+          <button
+            style={styles.syncButton}
+            onClick={syncLocalToServer}
+            disabled={syncStatus === '同期中...'}
+          >
+            🔄 オフライン投稿をアップロード
+          </button>
+          {syncStatus && (
+            <div style={styles.syncStatus}>
+              {syncStatus}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Safari対策の白いスペーサー（LOG画面のみ） */}
       {activeTab === 'LOG' && <div style={styles.safariSpacer} />}
@@ -2099,6 +2193,40 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     gap: '8px'
+  },
+  
+  // 同期ボタン関連
+  syncButtonContainer: {
+    position: 'fixed',
+    bottom: '70px',
+    left: '50%',
+    transform: 'translateX(-50%)',
+    zIndex: 1000,
+    textAlign: 'center'
+  },
+  
+  syncButton: {
+    backgroundColor: '#FF9800',
+    color: 'white',
+    border: 'none',
+    borderRadius: '24px',
+    padding: '12px 24px',
+    fontSize: '14px',
+    fontWeight: 'bold',
+    boxShadow: '0 4px 8px rgba(0,0,0,0.2)',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px'
+  },
+  
+  syncStatus: {
+    marginTop: '8px',
+    padding: '8px 16px',
+    backgroundColor: 'rgba(0,0,0,0.8)',
+    color: 'white',
+    borderRadius: '16px',
+    fontSize: '12px'
   },
   
   daySelector: {
