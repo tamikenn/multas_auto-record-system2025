@@ -12,6 +12,26 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: '10件以上の投稿が必要です' });
   }
 
+  // APIキーが設定されていない場合はダミーレポートを生成
+  if (!process.env.OPENAI_API_KEY) {
+    // カテゴリ別集計
+    const categoryCounts = {};
+    posts.forEach(post => {
+      const category = post.category;
+      if (!categoryCounts[category]) {
+        categoryCounts[category] = 0;
+      }
+      categoryCounts[category]++;
+    });
+
+    const topCategory = Object.entries(categoryCounts)
+      .sort(([,a], [,b]) => b - a)[0];
+    
+    const dummyReport = `実習期間中に${posts.length}件の記録を残し、特に${getCategoryName(parseInt(topCategory[0]))}に関する体験が${topCategory[1]}件と最も多くなりました。これは地域医療の現場でこの分野の重要性を実感したことを示しています。今後は、よりバランスよく各カテゴリを意識して学習を進めることが大切です。\n\n（テスト環境のため、AIレポートは簡易版となっています）`;
+    
+    return res.status(200).json({ report: dummyReport });
+  }
+
   const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY
   });

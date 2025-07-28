@@ -1,9 +1,5 @@
 import OpenAI from 'openai';
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -13,6 +9,14 @@ export default async function handler(req, res) {
 
   if (!category || !posts) {
     return res.status(400).json({ error: 'Category and posts are required' });
+  }
+
+  // APIキーが設定されていない場合はダミーサマリーを返す
+  if (!process.env.OPENAI_API_KEY) {
+    const firstPost = posts.split('\n')[0]?.replace('・', '').trim() || '実習体験';
+    const dummySummary = `私は${category}に関する実習を通じて、${firstPost}という貴重な経験をしました。この体験から、医療現場における${category}の重要性を深く理解することができました。特に印象的だったのは、現場での実践を通じて学ぶことの大切さです。今後の医療実践において、この経験を活かしていきたいと思います。\n\n（テスト環境のため、AI要約は簡易版となっています）`;
+    
+    return res.status(200).json({ summary: dummySummary });
   }
 
   try {
@@ -33,6 +37,10 @@ ${posts}
 
 高品質で読み応えのある文章:`;
 
+    const openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    });
+    
     const completion = await openai.chat.completions.create({
       model: "gpt-4",
       messages: [

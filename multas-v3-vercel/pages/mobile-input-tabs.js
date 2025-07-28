@@ -9,6 +9,7 @@ import html2canvas from 'html2canvas';
 const RadarChart = dynamic(() => import('../components/RadarChart'), { ssr: false });
 const SharedLearning = dynamic(() => import('../components/SharedLearning'), { ssr: false });
 
+// Version 3.3 - Level system removed
 export default function MobileInputTabs() {
   const [text, setText] = useState('');
   const [posts, setPosts] = useState([]);
@@ -25,9 +26,7 @@ export default function MobileInputTabs() {
   const [shareConfirmPost, setShareConfirmPost] = useState(null);
   const [sharedPosts, setSharedPosts] = useState([]);
   const [likedPosts, setLikedPosts] = useState([]);
-  const [reportDate, setReportDate] = useState('all');
-  const [userLevel, setUserLevel] = useState(1);
-  const [userExp, setUserExp] = useState(0); // レポート用の日付フィルター
+  const [reportDate, setReportDate] = useState('all'); // レポート用の日付フィルター
   const mainRef = useRef(null);
   
   const tabs = ['LOG', 'LIST', 'REPORT', 'みんな'];
@@ -50,21 +49,24 @@ export default function MobileInputTabs() {
       const savedPosts = storage.loadPosts() || [];
       setPosts(savedPosts);
       
-      // シェアされた投稿を読み込み
-      const savedSharedPosts = storage.loadSharedPosts() || [];
-      setSharedPosts(savedSharedPosts);
+      // サーバーからシェアされた投稿を読み込み
+      fetch('/api/get-shared-posts')
+        .then(response => response.json())
+        .then(data => {
+          if (data.success) {
+            setSharedPosts(data.posts || []);
+          }
+        })
+        .catch(error => {
+          console.error('Error loading shared posts:', error);
+          // フォールバック: ローカルストレージから読み込み
+          const savedSharedPosts = storage.loadSharedPosts() || [];
+          setSharedPosts(savedSharedPosts);
+        });
       
       // いいねした投稿を読み込み
       const savedLikedPosts = storage.getLikedPosts() || [];
       setLikedPosts(savedLikedPosts);
-      
-      // レベル情報を読み込み
-      const savedLevelData = localStorage.getItem(`user_level_${savedUser}`);
-      if (savedLevelData) {
-        const { level, exp } = JSON.parse(savedLevelData);
-        setUserLevel(level);
-        setUserExp(exp);
-      }
     }
   }, []);
   
@@ -89,57 +91,27 @@ export default function MobileInputTabs() {
       setPosts(savedPosts);
     }
     
-    // シェアされた投稿を読み込み
-    const savedSharedPosts = storage.loadSharedPosts() || [];
-    setSharedPosts(savedSharedPosts);
+    // サーバーからシェアされた投稿を読み込み
+    fetch('/api/get-shared-posts')
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          setSharedPosts(data.posts || []);
+        }
+      })
+      .catch(error => {
+        console.error('Error loading shared posts:', error);
+        // フォールバック: ローカルストレージから読み込み
+        const savedSharedPosts = storage.loadSharedPosts() || [];
+        setSharedPosts(savedSharedPosts);
+      });
     
     // いいねした投稿を読み込み
     const savedLikedPosts = storage.getLikedPosts() || [];
     setLikedPosts(savedLikedPosts);
     
-    // レベル情報を読み込み
-    const savedLevelData = localStorage.getItem(`user_level_${username}`);
-    if (savedLevelData) {
-      const { level, exp } = JSON.parse(savedLevelData);
-      setUserLevel(level);
-      setUserExp(exp);
-    } else {
-      // 新規ユーザーの場合は初期値を設定
-      setUserLevel(1);
-      setUserExp(0);
-    }
-    
     // 最後にログイン画面を非表示にする
     setShowLogin(false);
-  };
-  
-  // レベルシステム関数
-  const calculateExpForLevel = (level) => {
-    return Math.ceil(100 / level);
-  };
-
-  const addExperience = (pointsEarned) => {
-    const expPerPoint = calculateExpForLevel(userLevel);
-    let newExp = userExp + (expPerPoint * pointsEarned);
-    let newLevel = userLevel;
-
-    // レベルアップ処理（繰越なし）
-    while (newExp >= 100) {
-      newExp = 0; // 繰越なし
-      newLevel += 1;
-    }
-
-    setUserExp(newExp);
-    setUserLevel(newLevel);
-
-    // ローカルストレージに保存
-    if (currentUser) {
-      const levelData = {
-        level: newLevel,
-        exp: newExp
-      };
-      localStorage.setItem(`user_level_${currentUser}`, JSON.stringify(levelData));
-    }
   };
   
   // ログアウト処理
@@ -148,28 +120,87 @@ export default function MobileInputTabs() {
     setCurrentUser(null);
     setShowLogin(true);
     setPosts([]);
-    setUserLevel(1);
-    setUserExp(0);
   };
   
   // シェア処理
-  const handleShare = (post) => {
-    const updatedSharedPosts = storage.addSharedPost(post);
-    setSharedPosts(updatedSharedPosts);
+  const handleShare = async (post) => {
+    try {
+      // サーバーに送信
+      const response = await fetch('/api/share-post', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          post: {
+            ...post,
+            sharedBy: currentUser,
+            likes: {},
+            likeCount: 0
+          }
+        })
+      });
+      
+      if (response.ok) {
+        // サーバーから最新のシェア投稿を再取得
+        const getResponse = await fetch('/api/get-shared-posts');
+        if (getResponse.ok) {
+          const data = await getResponse.json();
+          setSharedPosts(data.posts || []);
+        }
+        
+        // ローカルストレージにも保存（バックアップ）
+        storage.addSharedPost(post);
+      } else {
+        throw new Error('Failed to share post');
+      }
+    } catch (error) {
+      console.error('Error sharing post:', error);
+      alert('投稿のシェアに失敗しました');
+    }
+    
     setShareConfirmPost(null);
   };
   
   // いいね処理
-  const handleLike = (postId) => {
-    const result = storage.toggleLike(postId);
-    if (result.liked) {
-      setLikedPosts([...likedPosts, postId]);
-    } else {
-      setLikedPosts(likedPosts.filter(id => id !== postId));
+  const handleLike = async (postId) => {
+    const isLiked = likedPosts.includes(postId);
+    const action = isLiked ? 'unlike' : 'like';
+    
+    try {
+      // サーバーに送信
+      const response = await fetch('/api/toggle-like', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          postId,
+          userId: currentUser,
+          action
+        })
+      });
+      
+      if (response.ok) {
+        // ローカルの状態を更新
+        if (action === 'like') {
+          setLikedPosts([...likedPosts, postId]);
+        } else {
+          setLikedPosts(likedPosts.filter(id => id !== postId));
+        }
+        
+        // サーバーから最新のシェア投稿を再取得
+        const getResponse = await fetch('/api/get-shared-posts');
+        if (getResponse.ok) {
+          const data = await getResponse.json();
+          setSharedPosts(data.posts || []);
+        }
+        
+        // ローカルストレージも更新（バックアップ）
+        storage.toggleLike(postId);
+      } else {
+        throw new Error('Failed to toggle like');
+      }
+    } catch (error) {
+      console.error('Error toggling like:', error);
+      alert('いいねの更新に失敗しました');
     }
-    // シェア投稿を再読み込み
-    const updatedPosts = storage.loadSharedPosts();
-    setSharedPosts(updatedPosts);
   };
 
   const handleSubmit = async () => {
@@ -198,7 +229,7 @@ export default function MobileInputTabs() {
           text: text,
           category: classifyData.elements[0].category, // 最初の要素のカテゴリを使用
           reason: '複数要素を含む',
-          timestamp: new Date().toLocaleString('ja-JP'),
+          timestamp: new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' }),
           isOriginal: true,
           hasElements: true,
           username: currentUser
@@ -213,7 +244,8 @@ export default function MobileInputTabs() {
             body: JSON.stringify({ 
               text: element.text,
               category: element.category,
-              reason: element.reason
+              reason: element.reason,
+              userName: currentUser
             })
           });
           
@@ -222,7 +254,7 @@ export default function MobileInputTabs() {
             text: element.text,
             category: element.category,
             reason: element.reason,
-            timestamp: new Date().toLocaleString('ja-JP'),
+            timestamp: new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' }),
             isElement: true,
             originalId: Date.now(),
             username: currentUser
@@ -236,7 +268,8 @@ export default function MobileInputTabs() {
           body: JSON.stringify({ 
             text,
             category: classifyData.category,
-            reason: classifyData.reason
+            reason: classifyData.reason,
+            userName: currentUser
           })
         });
         
@@ -245,28 +278,17 @@ export default function MobileInputTabs() {
           text,
           category: classifyData.category,
           reason: classifyData.reason,
-          timestamp: new Date().toLocaleString('ja-JP'),
+          timestamp: new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' }),
           username: currentUser
         });
       }
       
       // ローカルストレージに保存
       let updatedPosts = [...posts];
-      let elementCount = 0;
       for (const post of postsToAdd) {
         updatedPosts = storage.addPost(post);
-        // 要素分解されたポストのみカウント（オリジナルは除外）
-        if (post.isElement) {
-          elementCount++;
-        }
       }
       setPosts(updatedPosts);
-      
-      // 経験値を加算（要素分解されたポストの数だけ）
-      if (elementCount > 0) {
-        addExperience(elementCount);
-      }
-      
       setText('');
       
       // 最新の投稿が見えるように一番上にスクロール
@@ -339,9 +361,7 @@ export default function MobileInputTabs() {
         reason: classifyData.isMultiple ? '複数要素を含む' : classifyData.reason,
         hasElements: classifyData.isMultiple,
         edited: true,
-        editedAt: new Date().toLocaleString('ja-JP'),
-        day: currentDay,
-        username: currentUser?.username
+        editedAt: new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })
       };
       
       // 4. 複数要素の場合は新しい要素を追加
@@ -352,11 +372,10 @@ export default function MobileInputTabs() {
             text: element.text,
             category: element.category,
             reason: element.reason,
-            timestamp: new Date().toLocaleString('ja-JP'),
+            timestamp: new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' }),
             isElement: true,
             originalId: postId,
-            day: currentDay,
-            username: currentUser
+            userName: currentUser
           };
           updatedPosts.push(elementPost);
           storage.addPost(elementPost);
@@ -368,7 +387,8 @@ export default function MobileInputTabs() {
             body: JSON.stringify({ 
               text: element.text,
               category: element.category,
-              reason: element.reason
+              reason: element.reason,
+              userName: currentUser
             })
           });
         }
@@ -380,7 +400,8 @@ export default function MobileInputTabs() {
           body: JSON.stringify({ 
             text: editText,
             category: updatedPost.category,
-            reason: updatedPost.reason
+            reason: updatedPost.reason,
+            userName: currentUser
           })
         });
       }
@@ -413,35 +434,46 @@ export default function MobileInputTabs() {
     return false;
   });
   
-  // 日付マッピング定数
-  const DATE_MAPPINGS = {
-    '1': '2025-07-28',
-    '2': '2025-07-29',
-    '3': '2025-07-30',
-    '4': '2025-07-31',
-    '5': '2025-08-01'
-  };
-
   // REPORTタブ用：日付でフィルタリングされた投稿
   const getFilteredPostsForReport = () => {
-    const filterByDates = (posts, dates, include = true) => {
-      return posts.filter(post => {
-        if (!post.timestamp) return false;
-        const postDate = new Date(post.timestamp).toISOString().split('T')[0];
-        return include ? dates.includes(postDate) : !dates.includes(postDate);
-      });
+    // 日付の定義
+    const dateMappings = {
+      '1': '2025-07-28',
+      '2': '2025-07-29',
+      '3': '2025-07-30',
+      '4': '2025-07-31',
+      '5': '2025-08-01'
     };
-
-    const definedDates = Object.values(DATE_MAPPINGS);
     
     if (reportDate === 'all') {
-      return filterByDates(displayPosts, definedDates, true);
-    } else if (reportDate === 'practice') {
-      return filterByDates(displayPosts, definedDates, false);
-    } else {
-      const targetDate = DATE_MAPPINGS[reportDate];
-      return targetDate ? filterByDates(displayPosts, [targetDate], true) : [];
+      // 全期間: 1-5日目のみ（練習日を除く）
+      const definedDates = Object.values(dateMappings);
+      return displayPosts.filter(post => {
+        if (!post.timestamp) return false;
+        const postDate = new Date(post.timestamp).toISOString().split('T')[0];
+        return definedDates.includes(postDate);
+      });
     }
+    
+    if (reportDate === 'practice') {
+      // 練習日: 定義された日付以外の投稿
+      const definedDates = Object.values(dateMappings);
+      return displayPosts.filter(post => {
+        if (!post.timestamp) return false;
+        const postDate = new Date(post.timestamp).toISOString().split('T')[0];
+        return !definedDates.includes(postDate);
+      });
+    }
+    
+    // 特定の日付の投稿をフィルタリング
+    const targetDate = dateMappings[reportDate];
+    if (!targetDate) return [];
+    
+    return displayPosts.filter(post => {
+      if (!post.timestamp) return false;
+      const postDate = new Date(post.timestamp).toISOString().split('T')[0];
+      return postDate === targetDate;
+    });
   };
   
   const groupedPosts = displayPosts.reduce((acc, post) => {
@@ -458,79 +490,6 @@ export default function MobileInputTabs() {
   }
   
   
-  // PDFスタイルヘルパー関数
-  const createStyledElement = (tag, styles = {}, text = '') => {
-    const element = document.createElement(tag);
-    if (text) element.textContent = text;
-    Object.assign(element.style, styles);
-    return element;
-  };
-
-  const createElementWithChildren = (tag, styles = {}, children = []) => {
-    const element = createStyledElement(tag, styles);
-    children.forEach(child => element.appendChild(child));
-    return element;
-  };
-
-  const pdfStyles = {
-    container: {
-      padding: '60px 80px',
-      backgroundColor: 'white',
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN", sans-serif',
-      maxWidth: '1400px',
-      margin: '0 auto',
-      color: '#1a1a1a'
-    },
-    title: {
-      textAlign: 'center',
-      marginBottom: '16px',
-      fontSize: '42px',
-      fontWeight: '300',
-      color: '#1a1a1a',
-      letterSpacing: '8px',
-      textTransform: 'uppercase'
-    },
-    subtitle: {
-      textAlign: 'center',
-      marginBottom: '60px',
-      fontSize: '18px',
-      fontWeight: '400',
-      color: '#666666',
-      letterSpacing: '1px'
-    },
-    sectionTitle: {
-      fontSize: '32px',
-      color: '#1a1a1a',
-      marginTop: '60px',
-      marginBottom: '80px',
-      textAlign: 'center',
-      fontWeight: '300',
-      letterSpacing: '4px'
-    },
-    categoryBox: {
-      marginBottom: '60px',
-      backgroundColor: '#fafafa',
-      padding: '40px',
-      borderRadius: '12px',
-      pageBreakInside: 'avoid'
-    },
-    categoryTitle: {
-      color: '#000000',
-      fontSize: '20px',
-      marginBottom: '30px',
-      fontWeight: '500',
-      letterSpacing: '0.5px'
-    },
-    listItem: {
-      marginBottom: '32px',
-      fontSize: '15px',
-      paddingLeft: '28px',
-      position: 'relative',
-      lineHeight: '1.8',
-      color: '#333333'
-    }
-  };
-
   // PDF生成関数
   const generatePDF = async () => {
     try {
@@ -538,31 +497,54 @@ export default function MobileInputTabs() {
       const reportPosts = getFilteredPostsForReport();
       
       // PDFに含めるコンテンツを作成
-      const pdfContent = createStyledElement('div', pdfStyles.container);
+      const pdfContent = document.createElement('div');
+      pdfContent.style.padding = '60px 80px';
+      pdfContent.style.backgroundColor = 'white';
+      pdfContent.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN", sans-serif';
+      pdfContent.style.maxWidth = '1400px';
+      pdfContent.style.margin = '0 auto';
+      pdfContent.style.color = '#1a1a1a';
       
       // タイトル
-      const getDateLabel = (date) => {
-        if (date === 'all') return '全期間 (1-5日)';
-        if (date === 'practice') return '練習日';
-        const dateLabels = {
+      let dateLabel;
+      if (reportDate === 'all') {
+        dateLabel = '全期間 (1-5日)';
+      } else if (reportDate === 'practice') {
+        dateLabel = '練習日';
+      } else {
+        const dateMap = {
           '1': '1日目 (7/28)',
           '2': '2日目 (7/29)',
           '3': '3日目 (7/30)',
           '4': '4日目 (7/31)',
           '5': '5日目 (8/1)'
         };
-        return dateLabels[date] || `${date}日目`;
-      };
-      const dateLabel = getDateLabel(reportDate);
+        dateLabel = dateMap[reportDate] || `${reportDate}日目`;
+      }
       // タイトルと基本情報を1つのグループにまとめる
       const headerGroup = document.createElement('div');
       headerGroup.style.pageBreakInside = 'avoid';
       headerGroup.style.minHeight = '350px';
       
-      const title = createStyledElement('h1', pdfStyles.title, 'MULTAs 実習レポート');
+      const title = document.createElement('h1');
+      title.textContent = `MULTAs 実習レポート`;
+      title.style.textAlign = 'center';
+      title.style.marginBottom = '16px';
+      title.style.fontSize = '42px';
+      title.style.fontWeight = '300';
+      title.style.color = '#1a1a1a';
+      title.style.letterSpacing = '8px';
+      title.style.textTransform = 'uppercase';
       headerGroup.appendChild(title);
       
-      const subtitle = createStyledElement('h2', pdfStyles.subtitle, dateLabel);
+      const subtitle = document.createElement('h2');
+      subtitle.textContent = dateLabel;
+      subtitle.style.textAlign = 'center';
+      subtitle.style.marginBottom = '60px';
+      subtitle.style.fontSize = '18px';
+      subtitle.style.color = '#666666';
+      subtitle.style.fontWeight = '400';
+      subtitle.style.letterSpacing = '2px';
       headerGroup.appendChild(subtitle);
       
       // 基本情報
@@ -576,7 +558,7 @@ export default function MobileInputTabs() {
       info.style.padding = '30px 0';
       
       const infoItems = [
-        { label: '生成日時', value: new Date().toLocaleString('ja-JP'), isDate: true },
+        { label: '生成日時', value: new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' }), isDate: true },
         { label: '記録者', value: currentUser || '未設定', isDate: false },
         { label: '総記録数', value: reportPosts.length, isCount: true }
       ];
@@ -861,17 +843,26 @@ export default function MobileInputTabs() {
         listSection.style.paddingTop = '40px';
         
         
-        const listTitle = createStyledElement('h2', pdfStyles.sectionTitle, '記録一覧');
+        const listTitle = document.createElement('h2');
+        listTitle.textContent = '記録一覧';
+        listTitle.style.fontSize = '32px';
+        listTitle.style.color = '#1a1a1a';
+        listTitle.style.marginTop = '60px';
+        listTitle.style.marginBottom = '80px';
+        listTitle.style.textAlign = 'center';
+        listTitle.style.fontWeight = '300';
+        listTitle.style.letterSpacing = '4px';
         
         // 装飾的な下線
-        const titleUnderline = createStyledElement('div', {
-          width: '80px',
-          height: '2px',
-          backgroundColor: '#1a1a1a',
-          margin: '20px auto 0'
-        });
+        const titleUnderline = document.createElement('div');
+        titleUnderline.style.width = '80px';
+        titleUnderline.style.height = '2px';
+        titleUnderline.style.backgroundColor = '#1a1a1a';
+        titleUnderline.style.margin = '20px auto 0';
         
-        const titleWrapper = createElementWithChildren('div', {}, [listTitle, titleUnderline]);
+        const titleWrapper = document.createElement('div');
+        titleWrapper.appendChild(listTitle);
+        titleWrapper.appendChild(titleUnderline);
         listSection.appendChild(titleWrapper);
         
         // カテゴリ別にグループ化して表示
@@ -885,19 +876,30 @@ export default function MobileInputTabs() {
         Object.entries(groupedByCategory)
           .sort(([,a], [,b]) => b.length - a.length)
           .forEach(([category, posts]) => {
-            const categoryDiv = createStyledElement('div', pdfStyles.categoryBox);
+            const categoryDiv = document.createElement('div');
+            categoryDiv.style.marginBottom = '60px';
+            categoryDiv.style.backgroundColor = '#fafafa';
+            categoryDiv.style.padding = '40px';
+            categoryDiv.style.borderRadius = '12px';
+            categoryDiv.style.pageBreakInside = 'avoid';
             
-            const categoryTitle = createStyledElement('h3', pdfStyles.categoryTitle, getCategoryName(category));
+            const categoryTitle = document.createElement('h3');
+            categoryTitle.textContent = `${getCategoryName(category)}`;
+            categoryTitle.style.color = '#000000';
+            categoryTitle.style.fontSize = '20px';
+            categoryTitle.style.marginBottom = '30px';
+            categoryTitle.style.fontWeight = '500';
+            categoryTitle.style.letterSpacing = '0.5px';
             
-            const countBadge = createStyledElement('span', {
-              backgroundColor: '#e0e0e0',
-              color: '#333333',
-              padding: '6px 18px',
-              borderRadius: '4px',
-              fontSize: '16px',
-              marginLeft: '20px',
-              fontWeight: '400'
-            }, `${posts.length}件`);
+            const countBadge = document.createElement('span');
+            countBadge.textContent = `${posts.length}件`;
+            countBadge.style.backgroundColor = '#e0e0e0';
+            countBadge.style.color = '#333333';
+            countBadge.style.padding = '6px 18px';
+            countBadge.style.borderRadius = '4px';
+            countBadge.style.fontSize = '16px';
+            countBadge.style.marginLeft = '20px';
+            countBadge.style.fontWeight = '400';
             categoryTitle.appendChild(countBadge);
             
             categoryDiv.appendChild(categoryTitle);
@@ -909,7 +911,13 @@ export default function MobileInputTabs() {
             postsList.style.marginTop = '30px';
             
             posts.forEach(post => {
-              const li = createStyledElement('li', pdfStyles.listItem);
+              const li = document.createElement('li');
+              li.style.marginBottom = '32px';
+              li.style.fontSize = '15px';
+              li.style.paddingLeft = '28px';
+              li.style.position = 'relative';
+              li.style.lineHeight = '1.8';
+              li.style.color = '#333333';
               
               const bullet = document.createElement('span');
               bullet.textContent = '◆';
@@ -1311,8 +1319,9 @@ export default function MobileInputTabs() {
             ) : (
               <div style={styles.sharedList}>
                 {sharedPosts.map(post => {
-                  const isMyPost = post.sharedBy === currentUser;
-                  const isLiked = likedPosts.includes(post.id);
+                  const isMyPost = post.sharedBy === currentUser || post.userName === currentUser;
+                  const isLiked = post.likes && post.likes[currentUser] === true;
+                  const likeCount = post.likeCount || 0;
                   
                   return (
                     <div 
@@ -1329,7 +1338,7 @@ export default function MobileInputTabs() {
                         <div style={styles.sharedPostMeta}>
                           {isMyPost && <span style={styles.myPostBadge}>自分の投稿</span>}
                           <span style={styles.sharedDate}>
-                            {new Date(post.sharedAt).toLocaleDateString('ja-JP')}
+                            {post.date || post.timestamp}
                           </span>
                         </div>
                       </div>
@@ -1342,7 +1351,7 @@ export default function MobileInputTabs() {
                           }}
                           onClick={() => handleLike(post.id)}
                         >
-                          {isLiked ? '❤️' : '🤍'} {post.likes || 0}
+                          {isLiked ? '❤️' : '🤍'} {likeCount}
                         </button>
                       </div>
                     </div>
@@ -1360,7 +1369,7 @@ export default function MobileInputTabs() {
     return (
       <div style={styles.loginContainer}>
         <div style={styles.loginBox}>
-          <h1 style={styles.loginTitle}>MULTAs v3</h1>
+          <h1 style={styles.loginTitle}>MULTAs v3.3</h1>
           <p style={styles.loginSubtitle}>医学部実習記録システム</p>
           
           <div style={styles.loginForm}>
@@ -1410,22 +1419,8 @@ export default function MobileInputTabs() {
       <header style={styles.header}>
         <div style={styles.headerContent}>
           <div>
-            <h1 style={styles.title}>MULTAs v3</h1>
+            <h1 style={styles.title}>MULTAs v3.3</h1>
             <div style={styles.subtitle}>医学部実習記録システム</div>
-          </div>
-          <div style={styles.levelDisplay}>
-            <div style={styles.levelBadge}>Lv.{userLevel}</div>
-            <div style={styles.expBar}>
-              <div 
-                style={{ 
-                  ...styles.expBarInner, 
-                  width: `${userExp}%` 
-                }} 
-              />
-              <div style={styles.expTextOverlay}>
-                {userExp}/100 EXP
-              </div>
-            </div>
           </div>
           <div style={styles.userInfo}>
             <span style={styles.username}>👤 {currentUser}</span>
@@ -1435,10 +1430,16 @@ export default function MobileInputTabs() {
             >
               ログアウト
             </button>
+            <a 
+              href="/user-manual" 
+              style={styles.helpButton}
+              title="使い方ガイド"
+            >
+              ?
+            </a>
           </div>
         </div>
       </header>
-
 
       {/* タブナビゲーション */}
       <nav style={styles.tabNav}>
@@ -1510,7 +1511,7 @@ const styles = {
     top: 0,
     left: 0,
     right: 0,
-    zIndex: 9999,
+    zIndex: 100,
     padding: '15px 20px',
     boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
   },
@@ -1520,8 +1521,7 @@ const styles = {
     justifyContent: 'space-between',
     alignItems: 'center',
     maxWidth: '800px',
-    margin: '0 auto',
-    gap: '20px'
+    margin: '0 auto'
   },
   
   title: {
@@ -1567,7 +1567,7 @@ const styles = {
   
   main: {
     flex: 1,
-    marginTop: '140px', // ヘッダー + レベル表示 + タブ分
+    marginTop: '140px', // ヘッダー + タブ分
     marginBottom: '140px',
     padding: '20px',
     paddingTop: '10px',
@@ -1859,9 +1859,9 @@ const styles = {
   iconButton: {
     background: 'none',
     border: 'none',
-    fontSize: '14px',
+    fontSize: '10px',
     cursor: 'pointer',
-    padding: '4px',
+    padding: '2px',
     borderRadius: '4px',
     transition: 'background 0.2s'
   },
@@ -1932,95 +1932,6 @@ const styles = {
     fontSize: '14px',
     fontWeight: 'bold',
     cursor: 'pointer'
-  },
-  
-  // レベル・経験値表示用スタイル
-  levelDisplay: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'flex-end',
-    gap: '5px'
-  },
-  
-  levelBadge: {
-    backgroundColor: '#FFD700',
-    color: '#333',
-    padding: '4px 12px',
-    borderRadius: '20px',
-    fontSize: '16px',
-    fontWeight: 'bold'
-  },
-  
-  expBar: {
-    width: '120px',
-    height: '20px',
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    borderRadius: '10px',
-    position: 'relative',
-    overflow: 'hidden'
-  },
-  
-  expBarInner: {
-    height: '100%',
-    backgroundColor: '#4CAF50',
-    borderRadius: '10px',
-    transition: 'width 0.5s ease'
-  },
-  
-  expText: {
-    position: 'absolute',
-    top: '50%',
-    left: '50%',
-    transform: 'translate(-50%, -50%)',
-    fontSize: '11px',
-    fontWeight: 'bold',
-    color: 'white',
-    textShadow: '1px 1px 2px rgba(0,0,0,0.5)'
-  },
-  
-  expGainFloat: {
-    position: 'fixed',
-    top: '120px',
-    right: '20px',
-    backgroundColor: '#4CAF50',
-    color: 'white',
-    padding: '8px 16px',
-    borderRadius: '20px',
-    fontSize: '18px',
-    fontWeight: 'bold',
-    zIndex: 1000,
-    animation: 'floatUp 2s ease-out forwards',
-    boxShadow: '0 4px 8px rgba(0,0,0,0.3)'
-  },
-  
-  levelUpOverlay: {
-    position: 'fixed',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 2000,
-    animation: 'fadeIn 0.5s ease-out'
-  },
-  
-  levelUpText: {
-    fontSize: '48px',
-    fontWeight: 'bold',
-    color: '#FFD700',
-    textShadow: '0 0 20px rgba(255, 215, 0, 0.8)',
-    animation: 'pulse 1s ease-in-out infinite'
-  },
-  
-  levelUpNewLevel: {
-    fontSize: '36px',
-    color: 'white',
-    marginTop: '20px',
-    fontWeight: 'bold'
   },
   
   // SHARE画面用スタイル
@@ -2166,51 +2077,6 @@ const styles = {
     gap: '8px'
   },
   
-  // レベル表示セクション
-  // レベル・経験値表示用スタイル
-  levelDisplay: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: '5px'
-  },
-  
-  levelBadge: {
-    backgroundColor: '#FFD700',
-    color: '#333',
-    padding: '4px 12px',
-    borderRadius: '20px',
-    fontSize: '16px',
-    fontWeight: 'bold'
-  },
-  
-  expBar: {
-    width: '120px',
-    height: '20px',
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    borderRadius: '10px',
-    position: 'relative',
-    overflow: 'hidden'
-  },
-  
-  expBarInner: {
-    height: '100%',
-    backgroundColor: '#4CAF50',
-    borderRadius: '10px',
-    transition: 'width 0.5s ease'
-  },
-  
-  expTextOverlay: {
-    position: 'absolute',
-    top: '50%',
-    left: '50%',
-    transform: 'translate(-50%, -50%)',
-    fontSize: '11px',
-    fontWeight: 'bold',
-    color: 'white',
-    textShadow: '1px 1px 2px rgba(0,0,0,0.5)'
-  },
-  
   daySelector: {
     padding: '4px 8px',
     borderRadius: '4px',
@@ -2236,6 +2102,23 @@ const styles = {
     border: '1px solid rgba(255, 255, 255, 0.3)',
     borderRadius: '4px',
     fontSize: '12px',
+    cursor: 'pointer'
+  },
+  
+  helpButton: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '28px',
+    height: '28px',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    color: 'white',
+    border: '1px solid rgba(255, 255, 255, 0.3)',
+    borderRadius: '50%',
+    textDecoration: 'none',
+    fontWeight: 'bold',
+    fontSize: '16px',
+    marginLeft: '8px',
     cursor: 'pointer'
   },
   

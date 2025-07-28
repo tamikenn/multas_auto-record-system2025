@@ -10,7 +10,7 @@ export default function Home() {
         borderRadius: '12px',
         textAlign: 'center'
       }}>
-        <h2 style={{ fontSize: '32px', marginBottom: '20px' }}>🎉 医学部実習記録システム</h2>
+        <h2 style={{ fontSize: '32px', marginBottom: '20px' }}>🎉 MULTAs v3</h2>
         <p style={{ fontSize: '18px', marginBottom: '30px' }}>
           実習での体験を記録し、AIが12時計分類で整理します
         </p>

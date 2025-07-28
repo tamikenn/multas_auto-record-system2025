@@ -1,9 +1,5 @@
 import OpenAI from 'openai';
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -13,6 +9,41 @@ export default async function handler(req, res) {
 
   if (!text) {
     return res.status(400).json({ error: 'Text is required' });
+  }
+
+  // APIキーが設定されていない場合はダミーデータを返す
+  if (!process.env.OPENAI_API_KEY) {
+    const dummyCategory = Math.floor(Math.random() * 12) + 1;
+    const isLongText = text.length > 200;
+    
+    if (isLongText) {
+      // 長文の場合
+      const elements = [];
+      const numElements = Math.min(3, Math.floor(text.length / 100));
+      
+      for (let i = 0; i < numElements; i++) {
+        elements.push({
+          text: `要素${i + 1}: ${text.substring(i * 100, (i + 1) * 100)}...`,
+          category: Math.floor(Math.random() * 12) + 1,
+          reason: 'テスト環境のため自動分類',
+          confidence: 0.5
+        });
+      }
+      
+      return res.status(200).json({
+        isMultiple: true,
+        elements,
+        originalText: text
+      });
+    } else {
+      // 短文の場合
+      return res.status(200).json({
+        isMultiple: false,
+        category: dummyCategory,
+        reason: 'テスト環境のため自動分類',
+        confidence: 0.5
+      });
+    }
   }
 
   try {
@@ -43,6 +74,10 @@ export default async function handler(req, res) {
 
 // 単一要素の分類（既存の処理）
 async function classifySingleElement(text) {
+  const openai = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+  });
+  
   const prompt = `あなたは地域医療実習の体験を分類する専門家です。
 以下の学生の体験を、12時計のカテゴリのいずれかに分類してください。
 
@@ -86,6 +121,10 @@ ${text}
 
 // 複数要素の分析
 async function analyzeMultipleElements(text) {
+  const openai = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+  });
+  
   const prompt = `あなたは地域医療実習の体験を分析する専門家です。
 以下の長文の体験記録を読み、含まれている複数の学習要素を抽出してください。
 それぞれの要素について、独立した学習項目として分類可能な単位で分割してください。
