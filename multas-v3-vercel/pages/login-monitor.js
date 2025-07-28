@@ -1,6 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 
+export async function getServerSideProps() {
+  return {
+    props: {},
+  };
+}
+
 export default function LoginMonitor() {
   const [loginData, setLoginData] = useState({
     loggedInUsers: [],
