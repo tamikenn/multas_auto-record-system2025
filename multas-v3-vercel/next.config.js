@@ -1,15 +1,12 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // 静的エクスポートを削除（APIルートを使用するため）
-  // output: 'export',
-  
   // 画像最適化設定
   images: {
     unoptimized: true
   },
   
-  // トレイリングスラッシュを追加
-  trailingSlash: true,
+  // トレイリングスラッシュを削除（問題の原因の可能性）
+  trailingSlash: false,
   
   // 環境変数の設定
   env: {
