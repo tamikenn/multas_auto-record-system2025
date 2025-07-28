@@ -1,9 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // 静的HTMLエクスポートを有効化
-  output: 'export',
+  // 静的エクスポートを削除（APIルートを使用するため）
+  // output: 'export',
   
-  // 画像最適化を無効化（静的エクスポート時は必須）
+  // 画像最適化設定
   images: {
     unoptimized: true
   },
@@ -11,8 +11,10 @@ const nextConfig = {
   // トレイリングスラッシュを追加
   trailingSlash: true,
   
-  // 基本パスの設定（必要に応じて）
-  // basePath: '',
+  // 環境変数の設定
+  env: {
+    NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL || 'https://multas-v3-vercel.vercel.app'
+  }
 }
 
 module.exports = nextConfig
