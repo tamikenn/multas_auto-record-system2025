@@ -32,21 +32,6 @@ export default function MobileInputTabs() {
   
   const tabs = ['LOG', 'LIST', 'REPORT', 'みんな'];
   
-  // オンライン復帰時の自動同期
-  useEffect(() => {
-    if (!currentUser || !posts) return;
-    
-    const handleOnline = () => {
-      console.log('オンラインに復帰しました');
-      // 自動同期を実行
-      if (posts.some(p => !p.synced)) {
-        syncLocalToServer();
-      }
-    };
-    
-    window.addEventListener('online', handleOnline);
-    return () => window.removeEventListener('online', handleOnline);
-  }, [posts, currentUser]);
 
   // 初回読み込み時にローカルストレージからデータを復元
   useEffect(() => {
