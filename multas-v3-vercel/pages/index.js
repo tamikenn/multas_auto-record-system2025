@@ -91,6 +91,37 @@ export default function Home() {
           </li>
         </ul>
       </div>
+
+      {/* 管理者用診断ツールへのリンク */}
+      <div style={{ 
+        marginTop: '20px',
+        padding: '15px',
+        backgroundColor: '#fff3e0',
+        borderRadius: '8px',
+        textAlign: 'center',
+        border: '2px solid #ff9800'
+      }}>
+        <h3 style={{ color: '#f57c00' }}>🔧 管理者・開発者向け</h3>
+        <a 
+          href="/system-diagnostic" 
+          style={{ 
+            display: 'inline-block',
+            padding: '12px 24px',
+            backgroundColor: '#ff9800',
+            color: 'white',
+            textDecoration: 'none',
+            borderRadius: '6px',
+            fontSize: '16px',
+            fontWeight: 'bold',
+            margin: '10px'
+          }}
+        >
+          🔍 システム診断ツール
+        </a>
+        <p style={{ fontSize: '14px', color: '#666', marginTop: '10px' }}>
+          データ保存状況、AI API動作、ログイン機能の診断
+        </p>
+      </div>
     </div>
   );
 }

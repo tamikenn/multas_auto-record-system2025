@@ -16,11 +16,11 @@ export default async function handler(req, res) {
   });
 
   try {
-    const prompt = `
-以下の医学部実習での体験を、12時計分類のいずれかに分類してください。
+    console.log('OpenAI API 呼び出し開始:', text);
+    
+    const prompt = `以下の医学部実習での体験を、12時計分類のいずれかに分類してください。
 
 12時計分類:
-0: 分類不能（医学実習と関連が不明）
 1: 医療倫理（インフォームドコンセント、患者の権利、守秘義務）
 2: 地域医療（地域包括ケア、在宅医療、地域連携）
 3: 医学知識（病態生理、薬理、診断基準）
@@ -36,42 +36,51 @@ export default async function handler(req, res) {
 
 体験内容: ${text}
 
-回答は以下の形式でお願いします:
-カテゴリ番号: [1-12の数字]
-理由: [簡潔な分類理由]
-`;
+数字のみで回答してください（1-12）:`;
 
     const response = await openai.chat.completions.create({
-      model: "gpt-4",
+      model: "gpt-3.5-turbo",
       messages: [
-        { role: "system", content: "あなたは医学教育の専門家です。" },
+        { role: "system", content: "あなたは医学教育の専門家です。体験内容を12時計分類で分類し、該当する数字（1-12）のみを回答してください。" },
         { role: "user", content: prompt }
       ],
-      temperature: 0.3,
-      max_tokens: 200
+      temperature: 0.1,
+      max_tokens: 10
     });
 
-    const content = response.choices[0].message.content;
+    const content = response.choices[0].message.content.trim();
+    console.log('OpenAI API レスポンス:', content);
     
-    // 回答をパース
-    const categoryMatch = content.match(/カテゴリ番号[：:]\s*(\d+)/);
-    const reasonMatch = content.match(/理由[：:]\s*(.+)/);
+    // 数字を抽出
+    const categoryMatch = content.match(/(\d+)/);
+    const category = categoryMatch ? parseInt(categoryMatch[1]) : 8; // デフォルトはコミュニケーション
     
-    const category = categoryMatch ? parseInt(categoryMatch[1]) : 0;
-    const reason = reasonMatch ? reasonMatch[1].trim() : content;
+    // カテゴリが範囲外の場合は8（コミュニケーション）にする
+    const finalCategory = (category >= 1 && category <= 12) ? category : 8;
+    
+    console.log('分類結果:', finalCategory);
 
     res.status(200).json({
-      category: category,
-      reason: reason
+      success: true,
+      category: finalCategory,
+      reason: `AI分類: カテゴリ${finalCategory}`
     });
 
   } catch (error) {
-    console.error('OpenAI API エラー:', error);
+    console.error('OpenAI API エラー詳細:', error);
+    console.error('エラーメッセージ:', error.message);
+    console.error('エラーコード:', error.code);
+    
     res.status(500).json({ 
+      success: false,
       error: 'AI分類に失敗しました',
-      // フォールバック: エラー時はカテゴリ0を返す
-      category: 0,
-      reason: 'エラーが発生しました'
+      category: 8, // フォールバック: コミュニケーション
+      reason: `エラー: ${error.message}`,
+      debug: {
+        errorType: error.constructor.name,
+        errorCode: error.code,
+        hasApiKey: !!process.env.OPENAI_API_KEY
+      }
     });
   }
 }
