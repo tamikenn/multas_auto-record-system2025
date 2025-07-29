@@ -1245,12 +1245,44 @@ export default function MobileInputTabs() {
                 placeholder="実習で体験したことを入力..."
                 disabled={loading}
               />
+              {/* 文字数表示と警告 */}
+              <div style={{
+                fontSize: '12px',
+                textAlign: 'right',
+                marginTop: '5px',
+                minHeight: '20px'
+              }}>
+                <span style={{ color: '#666' }}>
+                  {text ? text.length : 0}文字
+                </span>
+                {text && text.length > 400 && (
+                  <div style={{ 
+                    color: '#ff6b6b', 
+                    marginTop: '2px',
+                    fontSize: '11px'
+                  }}>
+                    ⚠️ 長文のため分析精度が下がる可能性があります
+                  </div>
+                )}
+              </div>
               <button
                 style={{
                   ...styles.button,
                   opacity: loading || !text.trim() ? 0.5 : 1
                 }}
-                onClick={handleSubmit}
+                onClick={() => {
+                  if (text.length > 400) {
+                    const confirmed = window.confirm(
+                      '400文字を超えています。\n' +
+                      'AI分析の精度が下がる可能性がありますが、投稿しますか？\n\n' +
+                      `現在の文字数: ${text.length}文字`
+                    );
+                    if (!confirmed) {
+                      return;
+                    }
+                  }
+                  handleSubmit();
+                }}
                 disabled={loading || !text.trim()}
               >
                 {loading ? '送信中...' : '送信'}
