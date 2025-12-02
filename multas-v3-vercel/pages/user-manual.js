@@ -5,13 +5,13 @@ export default function UserManual() {
   return (
     <>
       <Head>
-        <title>MULTAs v3.3 使い方ガイド</title>
+        <title>MULTAs v3.4 使い方ガイド</title>
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
       </Head>
 
       <div className="manual-container">
         <header className="manual-header">
-          <h1>MULTAs v3.3 使い方ガイド</h1>
+          <h1>MULTAs v3.4 使い方ガイド</h1>
           <p className="subtitle">医学部実習記録システム</p>
         </header>
 

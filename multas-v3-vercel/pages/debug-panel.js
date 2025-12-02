@@ -100,7 +100,7 @@ export default function DebugPanel() {
   return (
     <>
       <Head>
-        <title>Debug Panel - MULTAs v3.3</title>
+        <title>Debug Panel - MULTAs v3.4</title>
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
       </Head>
 

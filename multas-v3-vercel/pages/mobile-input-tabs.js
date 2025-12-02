@@ -9,7 +9,7 @@ import html2canvas from 'html2canvas';
 const RadarChart = dynamic(() => import('../components/RadarChart'), { ssr: false });
 const SharedLearning = dynamic(() => import('../components/SharedLearning'), { ssr: false });
 
-// Version 3.3 - Level system removed
+// Version 3.4 - Local LLM + Excel Backend + Cloudflare Tunnel
 export default function MobileInputTabs() {
   const [text, setText] = useState('');
   const [posts, setPosts] = useState([]);
@@ -1486,7 +1486,7 @@ export default function MobileInputTabs() {
     return (
       <div style={styles.loginContainer}>
         <div style={styles.loginBox}>
-          <h1 style={styles.loginTitle}>MULTAs v3.3</h1>
+          <h1 style={styles.loginTitle}>MULTAs v3.4</h1>
           <p style={styles.loginSubtitle}>医学部実習記録システム</p>
           
           <div style={styles.loginForm}>
@@ -1536,7 +1536,7 @@ export default function MobileInputTabs() {
       <header style={styles.header}>
         <div style={styles.headerContent}>
           <div>
-            <h1 style={styles.title}>MULTAs v3.3</h1>
+            <h1 style={styles.title}>MULTAs v3.4</h1>
             <div style={styles.subtitle}>医学部実習記録システム</div>
           </div>
           <div style={styles.userInfo}>
