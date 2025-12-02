@@ -37,21 +37,56 @@ ${posts}
 
 高品質で読み応えのある文章:`;
 
-    const openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
-    });
+    const aiProvider = process.env.AI_PROVIDER || 'openai';
+    const hasOpenAIKey = !!process.env.OPENAI_API_KEY;
     
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4",
-      messages: [
-        { role: "system", content: "あなたは医学教育と臨床経験に精通した専門家です。" },
-        { role: "user", content: prompt }
-      ],
-      temperature: 0.8,
-      max_tokens: 600
-    });
+    let summary;
 
-    const summary = completion.choices[0].message.content.trim();
+    if (aiProvider === 'local' || !hasOpenAIKey) {
+      // LocalLLMを使用
+      const ollamaUrl = process.env.LOCAL_LLM_API_URL || 'http://localhost:11434/api/generate';
+      const model = process.env.LOCAL_LLM_MODEL_REPORT || 'qwen2.5:14b';
+      
+      const response = await fetch(ollamaUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: model,
+          prompt: prompt,
+          stream: false,
+          options: {
+            temperature: 0.8,
+            num_predict: 600,
+          }
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Ollama API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      summary = data.response ? data.response.trim() : '';
+    } else {
+      // OpenAIを使用
+      const openai = new OpenAI({
+        apiKey: process.env.OPENAI_API_KEY,
+      });
+      
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4",
+        messages: [
+          { role: "system", content: "あなたは医学教育と臨床経験に精通した専門家です。" },
+          { role: "user", content: prompt }
+        ],
+        temperature: 0.8,
+        max_tokens: 600
+      });
+
+      summary = completion.choices[0].message.content.trim();
+    }
 
     res.status(200).json({ summary });
 

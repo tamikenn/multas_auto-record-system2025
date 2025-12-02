@@ -1,6 +1,6 @@
 {
   "name": "multas-v3-vercel",
-  "version": "0.1.0",
+  "version": "3.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",

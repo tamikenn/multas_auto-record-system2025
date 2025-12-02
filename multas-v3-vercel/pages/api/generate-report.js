@@ -32,9 +32,8 @@ export default async function handler(req, res) {
     return res.status(200).json({ report: dummyReport });
   }
 
-  const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY
-  });
+  const aiProvider = process.env.AI_PROVIDER || 'openai';
+  const hasOpenAIKey = !!process.env.OPENAI_API_KEY;
 
   try {
     // カテゴリ別集計
@@ -74,20 +73,56 @@ ${summaryData}
 300-400文字程度でまとめてください。
 `;
 
-    const response = await openai.chat.completions.create({
-      model: "gpt-4",
-      messages: [
-        { 
-          role: "system", 
-          content: "あなたは医学教育の専門家です。学生の成長を支援する建設的なフィードバックを提供してください。" 
-        },
-        { role: "user", content: prompt }
-      ],
-      temperature: 0.7,
-      max_tokens: 800
-    });
+    let report;
 
-    const report = response.choices[0].message.content;
+    if (aiProvider === 'local' || !hasOpenAIKey) {
+      // LocalLLMを使用
+      const ollamaUrl = process.env.LOCAL_LLM_API_URL || 'http://localhost:11434/api/generate';
+      const model = process.env.LOCAL_LLM_MODEL_REPORT || 'qwen2.5:14b';
+      
+      const response = await fetch(ollamaUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: model,
+          prompt: prompt,
+          stream: false,
+          options: {
+            temperature: 0.7,
+            num_predict: 800,
+          }
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Ollama API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      report = data.response ? data.response.trim() : '';
+    } else {
+      // OpenAIを使用
+      const openai = new OpenAI({
+        apiKey: process.env.OPENAI_API_KEY
+      });
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4",
+        messages: [
+          { 
+            role: "system", 
+            content: "あなたは医学教育の専門家です。学生の成長を支援する建設的なフィードバックを提供してください。" 
+          },
+          { role: "user", content: prompt }
+        ],
+        temperature: 0.7,
+        max_tokens: 800
+      });
+
+      report = response.choices[0].message.content;
+    }
 
     res.status(200).json({ report });
 

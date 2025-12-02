@@ -84,11 +84,51 @@ export class AIClassifier {
   }
 
   async classifyWithLocal(text) {
-    // ローカルLLM implementation (将来的)
-    // Ollama, LM Studio, または独自モデルとの連携
+    // Ollama APIを使用したローカルLLM実装
+    const ollamaUrl = process.env.LOCAL_LLM_API_URL || 'http://localhost:11434/api/generate';
+    const model = process.env.LOCAL_LLM_MODEL_CLASSIFY || 'qwen2.5:7b';
     
-    // 現在は簡単なキーワードベース分類をフォールバック
-    return this.getKeywordBasedClassification(text);
+    try {
+      const prompt = this.getPrompt(text);
+      
+      const response = await fetch(ollamaUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: model,
+          prompt: prompt,
+          stream: false,
+          options: {
+            temperature: 0.1,
+            num_predict: 10, // 数字のみなので短く
+          }
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Ollama API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const content = data.response ? data.response.trim() : '';
+      
+      // 数字を抽出
+      const categoryMatch = content.match(/(\d+)/);
+      const category = categoryMatch ? parseInt(categoryMatch[1]) : 8;
+      
+      return {
+        success: true,
+        category: (category >= 1 && category <= 12) ? category : 8,
+        reason: `LocalLLM分類: カテゴリ${category}`,
+        provider: 'local'
+      };
+    } catch (error) {
+      console.error('LocalLLM分類エラー:', error);
+      // エラー時はキーワードベース分類にフォールバック
+      return this.getKeywordBasedClassification(text);
+    }
   }
 
   getKeywordBasedClassification(text) {
