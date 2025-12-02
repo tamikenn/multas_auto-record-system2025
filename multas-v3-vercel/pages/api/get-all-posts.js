@@ -1,4 +1,4 @@
-import { google } from 'googleapis';
+import { getHybridStorage } from '../../lib/hybrid-storage.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -6,46 +6,18 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 環境変数から認証情報を取得
-    const credentials = process.env.GOOGLE_CREDENTIALS;
-    const spreadsheetId = process.env.GOOGLE_SPREADSHEET_ID;
-
-    if (!credentials || !spreadsheetId) {
-      return res.status(500).json({ error: 'Google Sheets未設定' });
-    }
-
-    // 認証設定
-    const auth = new google.auth.GoogleAuth({
-      credentials: JSON.parse(credentials),
-      scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly']
-    });
-
-    const sheets = google.sheets({ version: 'v4', auth });
-
-    // スプレッドシート情報を取得
-    const sheetInfo = await sheets.spreadsheets.get({
-      spreadsheetId: spreadsheetId
-    });
-
-    const firstSheetName = sheetInfo.data.sheets[0].properties.title;
-
-    // データを取得（A列からE列まで）
-    const response = await sheets.spreadsheets.values.get({
-      spreadsheetId,
-      range: `${firstSheetName}!A:E`
-    });
-
-    const rows = response.data.values || [];
+    const hybridStorage = getHybridStorage();
     
-    // ヘッダー行をスキップして、データを整形
-    const posts = rows.slice(1).map((row, index) => ({
-      id: index + 1,
-      timestamp: row[0] || '',
-      userName: row[1] || 'ゲストユーザー',
-      text: row[2] || '',
-      category: row[3] || '',
-      reason: row[4] || ''
-    }));
+    // クエリパラメータからユーザー名を取得（オプション）
+    const { userName } = req.query;
+
+    // 投稿を取得
+    let posts;
+    if (userName) {
+      posts = await hybridStorage.loadUserPosts(userName);
+    } else {
+      posts = await hybridStorage.loadAllPosts();
+    }
 
     // 学生別の統計情報を計算
     const studentStats = {};
@@ -72,12 +44,20 @@ export default async function handler(req, res) {
       }
     });
 
+    // 最新順にソート
+    posts.sort((a, b) => {
+      const dateA = new Date(a.timestamp);
+      const dateB = new Date(b.timestamp);
+      return dateB - dateA;
+    });
+
     res.status(200).json({
       success: true,
-      posts: posts.reverse(), // 最新順
+      posts: posts,
       studentStats: Object.values(studentStats),
       totalPosts: posts.length,
-      totalStudents: Object.keys(studentStats).length
+      totalStudents: Object.keys(studentStats).length,
+      source: 'Excel'
     });
 
   } catch (error) {

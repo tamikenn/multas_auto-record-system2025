@@ -1,5 +1,39 @@
 # Changelog
 
+## [3.2.0] - 2024-12-02
+
+### Added
+- 🗄️ ローカルExcelバックエンド統合
+  - ExcelManagerクラス（`lib/excel-manager.js`）
+  - HybridStorageクラス（`lib/hybrid-storage.js`）
+- 📦 自動バックアップ機能
+  - 投稿追加・更新・削除時に自動バックアップ
+  - 最低3つのバックアップを保持
+  - 30日以上古いバックアップを自動削除
+- 🔄 Google Sheetsバックグラウンド同期
+  - 5秒バッチング（複数投稿をまとめて同期）
+  - node-cronによる定期処理（5分ごと）
+  - 失敗時の自動再試行（最大3回）
+
+### Changed
+- ⚡ プライマリストレージをGoogle SheetsからExcelに変更
+- 🔧 `pages/api/save-post.js` - HybridStorageを使用
+- 🔧 `pages/api/get-all-posts.js` - HybridStorageを使用
+
+### Benefits
+- ⚡ 高速な読み書き（Excelファイルへの直接アクセス）
+- 🌐 完全オフライン動作可能
+- 💾 自動バックアップによるデータ安全性向上
+- 🔄 柔軟な同期（Google Sheetsはオプション）
+
+### Technical Details
+- ExcelJS 4.4.0
+- node-cron 3.0.3
+- データディレクトリ: `data/multas_posts.xlsx`
+- バックアップディレクトリ: `data/backups/`
+
+---
+
 ## [3.1.0] - 2024-12-02
 
 ### Added
@@ -62,4 +96,3 @@
 - セーフティモード版
 - GitHub Pages対応
 - 安定版リリース
-
