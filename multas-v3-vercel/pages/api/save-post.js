@@ -3,7 +3,7 @@
  * 投稿をExcelに保存し、Google Sheetsにバックグラウンド同期
  */
 
-import { getHybridStorage } from '../../lib/hybrid-storage.js';
+import { getStorageSync } from '../../lib/server-storage.js';
 import { createLogger } from '../../lib/logger.js';
 import { 
   DEFAULT_USER_NAME, 
@@ -105,7 +105,7 @@ export default async function handler(req, res) {
   const { text, category, reason, userName, id } = validation.data;
 
   try {
-    const hybridStorage = getHybridStorage();
+    const storage = getStorageSync();
     const timestamp = getJapanTimestamp();
 
     // 投稿データを準備
@@ -122,7 +122,7 @@ export default async function handler(req, res) {
     logger.info(`投稿保存: ${userName} - "${text.substring(0, 30)}..."`);
 
     // HybridStorageを使用して保存
-    const result = await hybridStorage.addPost(post);
+    const result = await storage.addPost(post);
 
     logger.debug('保存結果', result);
 

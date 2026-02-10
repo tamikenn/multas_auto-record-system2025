@@ -25,6 +25,19 @@ export const isDevelopment = NODE_ENV === 'development';
  */
 export const isProduction = NODE_ENV === 'production';
 
+/**
+ * Vercel環境かどうか
+ */
+export const isVercel = !!process.env.VERCEL || !!process.env.VERCEL_ENV;
+
+/**
+ * ストレージモード
+ * - 'hybrid': ローカルPC用（Excel + Google Sheets同期）
+ * - 'sheets': クラウド用（Google Sheets専用）
+ * @type {'hybrid' | 'sheets'}
+ */
+export const STORAGE_MODE = process.env.STORAGE_MODE || (isVercel ? 'sheets' : 'hybrid');
+
 // =============================================================================
 // データストレージ設定
 // =============================================================================

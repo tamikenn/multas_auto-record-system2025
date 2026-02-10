@@ -3,7 +3,7 @@
  * 全投稿またはユーザー別の投稿を取得
  */
 
-import { getHybridStorage } from '../../lib/hybrid-storage.js';
+import { getStorageSync, getStorageInfo } from '../../lib/server-storage.js';
 import { createLogger } from '../../lib/logger.js';
 
 const logger = createLogger('API:get-all-posts');
@@ -85,17 +85,17 @@ export default async function handler(req, res) {
   }
 
   try {
-    const hybridStorage = getHybridStorage();
+    const storage = getStorageSync();
     const { userName, limit, offset } = req.query;
 
     // 投稿を取得
     let posts;
     if (userName) {
       logger.debug(`ユーザー別取得: ${userName}`);
-      posts = await hybridStorage.loadUserPosts(userName);
+      posts = await storage.loadUserPosts(userName);
     } else {
       logger.debug('全投稿取得');
-      posts = await hybridStorage.loadAllPosts();
+      posts = await storage.loadAllPosts();
     }
 
     // ソート
@@ -120,7 +120,7 @@ export default async function handler(req, res) {
       studentStats,
       totalPosts,
       totalStudents: studentStats.length,
-      source: 'Excel',
+      source: getStorageInfo().mode === 'sheets' ? 'Google Sheets' : 'Excel',
     });
 
   } catch (error) {
