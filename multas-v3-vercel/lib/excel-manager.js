@@ -1,128 +1,217 @@
-// ExcelManager - Excelファイルの読み書きを管理するクラス
+/**
+ * @fileoverview ExcelManager
+ * Excelファイルの読み書きを管理するクラス
+ */
+
 import ExcelJS from 'exceljs';
 import fs from 'fs';
 import path from 'path';
+import {
+  DATA_DIR,
+  EXCEL_FILE_PATH,
+  BACKUP_DIR,
+  BACKUP_CONFIG,
+  EXCEL_COLUMNS,
+  COLUMN_INDEX_MAP,
+} from './config.js';
+import { createLogger } from './logger.js';
 
-// データディレクトリのパス（プロジェクトルートのdataディレクトリ）
-const DATA_DIR = path.join(process.cwd(), 'data');
-const EXCEL_FILE = path.join(DATA_DIR, 'multas_posts.xlsx');
-const BACKUP_DIR = path.join(DATA_DIR, 'backups');
+const logger = createLogger('ExcelManager');
 
-// データディレクトリとバックアップディレクトリを確保
-function ensureDirectories() {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  }
-  if (!fs.existsSync(BACKUP_DIR)) {
-    fs.mkdirSync(BACKUP_DIR, { recursive: true });
+// 最後にバックアップを作成した時刻
+let lastBackupTime = 0;
+
+/**
+ * ディレクトリが存在することを確認し、なければ作成
+ * @param {string} dirPath - ディレクトリパス
+ */
+function ensureDirectory(dirPath) {
+  if (!fs.existsSync(dirPath)) {
+    fs.mkdirSync(dirPath, { recursive: true });
+    logger.debug(`ディレクトリ作成: ${dirPath}`);
   }
 }
 
-// バックアップファイル名を生成（タイムスタンプ付き）
-function getBackupFileName() {
+/**
+ * 必要なディレクトリを確保
+ */
+function ensureDirectories() {
+  ensureDirectory(DATA_DIR);
+  ensureDirectory(BACKUP_DIR);
+}
+
+/**
+ * バックアップファイル名を生成
+ * @returns {string}
+ */
+function generateBackupFileName() {
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
   return `multas_posts_backup_${timestamp}.xlsx`;
 }
 
-// 古いバックアップを削除（30日以上古いもの、ただし最低3つは残す）
+/**
+ * 古いバックアップを削除
+ */
 function cleanupOldBackups() {
   try {
+    if (!fs.existsSync(BACKUP_DIR)) return;
+
     const files = fs.readdirSync(BACKUP_DIR);
     const now = Date.now();
-    const thirtyDaysAgo = now - (30 * 24 * 60 * 60 * 1000);
+    const maxAge = BACKUP_CONFIG.maxAgeDays * 24 * 60 * 60 * 1000;
 
-    // バックアップファイルのみを抽出
-    const backupFiles = files.filter(file => 
-      file.startsWith('multas_posts_backup_') && file.endsWith('.xlsx')
-    );
+    // バックアップファイルのみを抽出してソート
+    const backupFiles = files
+      .filter(file => file.startsWith('multas_posts_backup_') && file.endsWith('.xlsx'))
+      .map(file => {
+        const filePath = path.join(BACKUP_DIR, file);
+        const stats = fs.statSync(filePath);
+        return { name: file, path: filePath, mtime: stats.mtimeMs };
+      })
+      .sort((a, b) => b.mtime - a.mtime);
 
-    // ファイルを日付順にソート（新しい順）
-    const sortedFiles = backupFiles.map(file => {
-      const filePath = path.join(BACKUP_DIR, file);
-      const stats = fs.statSync(filePath);
-      return {
-        name: file,
-        path: filePath,
-        mtime: stats.mtimeMs
-      };
-    }).sort((a, b) => b.mtime - a.mtime);
-
-    // 最低3つは残す
-    const minBackupsToKeep = 3;
-    
-    if (sortedFiles.length > minBackupsToKeep) {
-      // 3つ目以降で30日以上古いものを削除
-      sortedFiles.slice(minBackupsToKeep).forEach(file => {
-        if (file.mtime < thirtyDaysAgo) {
+    // 最低保持数より多い場合、古いものを削除
+    if (backupFiles.length > BACKUP_CONFIG.minKeepCount) {
+      backupFiles.slice(BACKUP_CONFIG.minKeepCount).forEach(file => {
+        if (now - file.mtime > maxAge) {
           fs.unlinkSync(file.path);
-          console.log(`古いバックアップを削除: ${file.name}`);
+          logger.info(`古いバックアップを削除: ${file.name}`);
         }
       });
     }
   } catch (error) {
-    console.error('バックアップクリーンアップエラー:', error);
+    logger.error('バックアップクリーンアップエラー', error);
   }
 }
 
+/**
+ * 投稿データをExcel行データ（配列）に変換
+ * @param {Object} post - 投稿データ
+ * @param {string} timestamp - タイムスタンプ
+ * @returns {Array}
+ */
+function postToRowArray(post, timestamp) {
+  return [
+    post.id || `excel_${Date.now()}`,
+    timestamp,
+    post.userName || 'ゲストユーザー',
+    post.text || '',
+    post.category || 0,
+    post.reason || '',
+    post.date || timestamp,
+  ];
+}
+
+/**
+ * Excel行データを投稿オブジェクトに変換
+ * @param {ExcelJS.Row} row - Excelの行
+ * @param {number} rowNumber - 行番号
+ * @returns {Object | null}
+ */
+function rowToPost(row, rowNumber) {
+  const text = row.getCell(COLUMN_INDEX_MAP.text).value?.toString() || '';
+  
+  // テキストが空の場合はスキップ
+  if (!text.trim()) {
+    return null;
+  }
+
+  return {
+    id: row.getCell(COLUMN_INDEX_MAP.id).value?.toString() || `excel_${rowNumber}`,
+    timestamp: row.getCell(COLUMN_INDEX_MAP.timestamp).value?.toString() || '',
+    userName: row.getCell(COLUMN_INDEX_MAP.userName).value?.toString() || '',
+    text,
+    category: parseInt(row.getCell(COLUMN_INDEX_MAP.category).value) || 0,
+    reason: row.getCell(COLUMN_INDEX_MAP.reason).value?.toString() || '',
+    date: row.getCell(COLUMN_INDEX_MAP.date).value?.toString() || '',
+  };
+}
+
+/**
+ * ExcelManager クラス
+ * Excelファイルの読み書きを管理
+ */
 export class ExcelManager {
   constructor() {
     ensureDirectories();
-    cleanupOldBackups();
+    // 初期化時にクリーンアップを非同期で実行（ブロックしない）
+    setImmediate(() => cleanupOldBackups());
   }
 
-  // Excelファイルが存在するか確認
+  /**
+   * Excelファイルが存在するか確認
+   * @returns {Promise<boolean>}
+   */
   async fileExists() {
-    return fs.existsSync(EXCEL_FILE);
+    return fs.existsSync(EXCEL_FILE_PATH);
   }
 
-  // Excelファイルを作成（初期化）
+  /**
+   * Excelファイルを作成（初期化）
+   * @returns {Promise<string>} ファイルパス
+   */
   async createFile() {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Posts');
 
     // ヘッダー行を設定
-    worksheet.columns = [
-      { header: 'ID', key: 'id', width: 15 },
-      { header: 'タイムスタンプ', key: 'timestamp', width: 20 },
-      { header: 'ユーザー名', key: 'userName', width: 15 },
-      { header: '投稿内容', key: 'text', width: 50 },
-      { header: 'カテゴリ', key: 'category', width: 10 },
-      { header: '分類理由', key: 'reason', width: 30 },
-      { header: '日付', key: 'date', width: 15 }
-    ];
+    worksheet.columns = EXCEL_COLUMNS.map(col => ({
+      header: col.header,
+      key: col.key,
+      width: col.width,
+    }));
 
-    // ヘッダー行のスタイル設定
-    worksheet.getRow(1).font = { bold: true };
-    worksheet.getRow(1).fill = {
+    // ヘッダー行のスタイル
+    const headerRow = worksheet.getRow(1);
+    headerRow.font = { bold: true };
+    headerRow.fill = {
       type: 'pattern',
       pattern: 'solid',
-      fgColor: { argb: 'FFE0E0E0' }
+      fgColor: { argb: 'FFE0E0E0' },
     };
 
-    await workbook.xlsx.writeFile(EXCEL_FILE);
-    return EXCEL_FILE;
+    await workbook.xlsx.writeFile(EXCEL_FILE_PATH);
+    logger.info('Excelファイル作成完了');
+    return EXCEL_FILE_PATH;
   }
 
-  // バックアップを作成
-  async createBackup() {
+  /**
+   * バックアップを作成（頻度制限付き）
+   * @param {boolean} force - 強制的にバックアップを作成
+   * @returns {Promise<string | null>} バックアップファイルパス
+   */
+  async createBackup(force = false) {
     if (!await this.fileExists()) {
       return null;
     }
 
-    const backupFileName = getBackupFileName();
-    const backupPath = path.join(BACKUP_DIR, backupFileName);
+    const now = Date.now();
+    
+    // 強制でなく、前回のバックアップから最小間隔が経過していない場合はスキップ
+    if (!force && (now - lastBackupTime) < BACKUP_CONFIG.minIntervalMs) {
+      logger.debug('バックアップスキップ（頻度制限）');
+      return null;
+    }
 
     try {
-      fs.copyFileSync(EXCEL_FILE, backupPath);
-      console.log(`バックアップ作成: ${backupFileName}`);
+      const backupFileName = generateBackupFileName();
+      const backupPath = path.join(BACKUP_DIR, backupFileName);
+      
+      fs.copyFileSync(EXCEL_FILE_PATH, backupPath);
+      lastBackupTime = now;
+      
+      logger.info(`バックアップ作成: ${backupFileName}`);
       return backupPath;
     } catch (error) {
-      console.error('バックアップ作成エラー:', error);
+      logger.error('バックアップ作成エラー', error);
       throw error;
     }
   }
 
-  // 全投稿を読み込む
+  /**
+   * 全投稿を読み込む
+   * @returns {Promise<Array<Object>>}
+   */
   async loadAllPosts() {
     if (!await this.fileExists()) {
       return [];
@@ -130,10 +219,11 @@ export class ExcelManager {
 
     try {
       const workbook = new ExcelJS.Workbook();
-      await workbook.xlsx.readFile(EXCEL_FILE);
+      await workbook.xlsx.readFile(EXCEL_FILE_PATH);
       const worksheet = workbook.getWorksheet('Posts');
 
       if (!worksheet) {
+        logger.warn('Postsワークシートが見つかりません');
         return [];
       }
 
@@ -142,136 +232,124 @@ export class ExcelManager {
         // ヘッダー行をスキップ
         if (rowNumber === 1) return;
 
-        const post = {
-          id: row.getCell(1).value?.toString() || `excel_${rowNumber}`,
-          timestamp: row.getCell(2).value?.toString() || '',
-          userName: row.getCell(3).value?.toString() || '',
-          text: row.getCell(4).value?.toString() || '',
-          category: row.getCell(5).value ? parseInt(row.getCell(5).value) : 0,
-          reason: row.getCell(6).value?.toString() || '',
-          date: row.getCell(7).value?.toString() || row.getCell(2).value?.toString() || ''
-        };
-
-        if (post.text) {
+        const post = rowToPost(row, rowNumber);
+        if (post) {
           posts.push(post);
         }
       });
 
+      logger.debug(`${posts.length}件の投稿を読み込み`);
       return posts;
     } catch (error) {
-      console.error('Excel読み込みエラー:', error);
+      logger.error('Excel読み込みエラー', error);
       throw error;
     }
   }
 
-  // 投稿を追加
+  /**
+   * 投稿を追加
+   * @param {Object} post - 投稿データ
+   * @returns {Promise<number>} 追加された行番号
+   */
   async addPost(post) {
+    const endTimer = logger.time('addPost');
+
     try {
-      // バックアップを作成
+      // バックアップを作成（頻度制限付き）
       await this.createBackup();
 
       const workbook = new ExcelJS.Workbook();
       
       if (await this.fileExists()) {
-        await workbook.xlsx.readFile(EXCEL_FILE);
+        await workbook.xlsx.readFile(EXCEL_FILE_PATH);
       } else {
         await this.createFile();
-        await workbook.xlsx.readFile(EXCEL_FILE);
+        await workbook.xlsx.readFile(EXCEL_FILE_PATH);
       }
 
       const worksheet = workbook.getWorksheet('Posts');
+      const timestamp = post.timestamp || new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
+      
+      // 配列形式で行を追加（ExcelJS読み込み後はcolumnsのkeyが失われるため）
+      const newRow = worksheet.addRow(postToRowArray(post, timestamp));
 
-      // 新しい行を追加
-      const newRow = worksheet.addRow({
-        id: post.id || `excel_${Date.now()}`,
-        timestamp: post.timestamp || new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' }),
-        userName: post.userName || 'ゲストユーザー',
-        text: post.text || '',
-        category: post.category || 0,
-        reason: post.reason || '',
-        date: post.date || post.timestamp || new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })
-      });
-
-      await workbook.xlsx.writeFile(EXCEL_FILE);
+      await workbook.xlsx.writeFile(EXCEL_FILE_PATH);
+      
+      logger.info(`投稿追加: 行${newRow.number}`);
+      endTimer();
       return newRow.number;
     } catch (error) {
-      console.error('投稿追加エラー:', error);
+      logger.error('投稿追加エラー', error);
+      endTimer();
       throw error;
     }
   }
 
-  // 投稿を更新
+  /**
+   * 投稿を更新
+   * @param {string} postId - 投稿ID
+   * @param {Object} updatedData - 更新データ
+   * @returns {Promise<boolean>} 更新成功したかどうか
+   */
   async updatePost(postId, updatedData) {
     try {
-      // バックアップを作成
       await this.createBackup();
 
       const workbook = new ExcelJS.Workbook();
-      await workbook.xlsx.readFile(EXCEL_FILE);
+      await workbook.xlsx.readFile(EXCEL_FILE_PATH);
       const worksheet = workbook.getWorksheet('Posts');
 
       let updated = false;
 
       worksheet.eachRow((row, rowNumber) => {
-        if (rowNumber === 1) return; // ヘッダー行をスキップ
+        if (rowNumber === 1) return;
 
-        const currentId = row.getCell(1).value?.toString();
+        const currentId = row.getCell(COLUMN_INDEX_MAP.id).value?.toString();
         if (currentId === postId.toString()) {
-          // 該当行を更新
-          if (updatedData.timestamp !== undefined) {
-            row.getCell(2).value = updatedData.timestamp;
-          }
-          if (updatedData.userName !== undefined) {
-            row.getCell(3).value = updatedData.userName;
-          }
-          if (updatedData.text !== undefined) {
-            row.getCell(4).value = updatedData.text;
-          }
-          if (updatedData.category !== undefined) {
-            row.getCell(5).value = updatedData.category;
-          }
-          if (updatedData.reason !== undefined) {
-            row.getCell(6).value = updatedData.reason;
-          }
-          if (updatedData.date !== undefined) {
-            row.getCell(7).value = updatedData.date;
-          }
+          // 各フィールドを更新
+          Object.entries(updatedData).forEach(([key, value]) => {
+            const colIndex = COLUMN_INDEX_MAP[key];
+            if (colIndex && value !== undefined) {
+              row.getCell(colIndex).value = value;
+            }
+          });
           updated = true;
         }
       });
 
       if (updated) {
-        await workbook.xlsx.writeFile(EXCEL_FILE);
-        return true;
+        await workbook.xlsx.writeFile(EXCEL_FILE_PATH);
+        logger.info(`投稿更新: ${postId}`);
       }
 
-      return false;
+      return updated;
     } catch (error) {
-      console.error('投稿更新エラー:', error);
+      logger.error('投稿更新エラー', error);
       throw error;
     }
   }
 
-  // 投稿を削除
+  /**
+   * 投稿を削除
+   * @param {string} postId - 投稿ID
+   * @returns {Promise<boolean>} 削除成功したかどうか
+   */
   async deletePost(postId) {
     try {
-      // バックアップを作成
-      await this.createBackup();
+      await this.createBackup(true); // 削除時は強制バックアップ
 
       const workbook = new ExcelJS.Workbook();
-      await workbook.xlsx.readFile(EXCEL_FILE);
+      await workbook.xlsx.readFile(EXCEL_FILE_PATH);
       const worksheet = workbook.getWorksheet('Posts');
 
-      let deleted = false;
       const rowsToDelete = [];
 
       worksheet.eachRow((row, rowNumber) => {
-        if (rowNumber === 1) return; // ヘッダー行をスキップ
+        if (rowNumber === 1) return;
 
-        const currentId = row.getCell(1).value?.toString();
+        const currentId = row.getCell(COLUMN_INDEX_MAP.id).value?.toString();
         if (currentId === postId.toString()) {
           rowsToDelete.push(rowNumber);
-          deleted = true;
         }
       });
 
@@ -280,32 +358,58 @@ export class ExcelManager {
         worksheet.spliceRows(rowNumber, 1);
       });
 
-      if (deleted) {
-        await workbook.xlsx.writeFile(EXCEL_FILE);
+      if (rowsToDelete.length > 0) {
+        await workbook.xlsx.writeFile(EXCEL_FILE_PATH);
+        logger.info(`投稿削除: ${postId}`);
         return true;
       }
 
       return false;
     } catch (error) {
-      console.error('投稿削除エラー:', error);
+      logger.error('投稿削除エラー', error);
       throw error;
     }
   }
 
-  // ユーザーごとの投稿を取得
+  /**
+   * ユーザーごとの投稿を取得
+   * @param {string} userName - ユーザー名
+   * @returns {Promise<Array<Object>>}
+   */
   async loadUserPosts(userName) {
     const allPosts = await this.loadAllPosts();
     return allPosts.filter(post => post.userName === userName);
   }
 
-  // ファイルパスを取得
+  /**
+   * ファイルパスを取得
+   * @returns {string}
+   */
   getFilePath() {
-    return EXCEL_FILE;
+    return EXCEL_FILE_PATH;
   }
 
-  // バックアップディレクトリのパスを取得
+  /**
+   * バックアップディレクトリのパスを取得
+   * @returns {string}
+   */
   getBackupDir() {
     return BACKUP_DIR;
   }
-}
 
+  /**
+   * 統計情報を取得
+   * @returns {Promise<Object>}
+   */
+  async getStats() {
+    const posts = await this.loadAllPosts();
+    const users = new Set(posts.map(p => p.userName));
+    
+    return {
+      totalPosts: posts.length,
+      totalUsers: users.size,
+      filePath: EXCEL_FILE_PATH,
+      fileExists: await this.fileExists(),
+    };
+  }
+}
