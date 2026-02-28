@@ -1,548 +1,878 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/router';
 import Head from 'next/head';
+import dynamic from 'next/dynamic';
+
+const RadarChart = dynamic(() => import('../components/RadarChart'), { ssr: false });
 
 export default function TeacherDashboard() {
-  const [activeView, setActiveView] = useState('overview');
-  const [allPosts, setAllPosts] = useState([]);
-  const [studentStats, setStudentStats] = useState([]);
+  const router = useRouter();
+  const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [students, setStudents] = useState([]);
   const [selectedStudent, setSelectedStudent] = useState(null);
-  const [dateRange, setDateRange] = useState({
-    start: '',
-    end: ''
-  });
+  const [studentPosts, setStudentPosts] = useState([]);
+  const [viewMode, setViewMode] = useState('timeline');
+  const [postsLoading, setPostsLoading] = useState(false);
+  const [mainTab, setMainTab] = useState('students');
+  const [sharedPosts, setSharedPosts] = useState([]);
+  const [likedPosts, setLikedPosts] = useState([]);
 
   useEffect(() => {
-    fetchAllData();
+    checkSession();
   }, []);
 
-  const fetchAllData = async () => {
+  const checkSession = async () => {
     try {
-      setLoading(true);
-      const response = await fetch('/api/get-all-posts');
+      const response = await fetch('/api/auth/session');
       const data = await response.json();
       
-      if (data.success) {
-        setAllPosts(data.posts);
-        setStudentStats(data.studentStats);
-      } else {
-        setError(data.error);
+      if (!data.authenticated) {
+        router.replace('/login');
+        return;
       }
-    } catch (err) {
-      setError('データの取得に失敗しました');
+      
+      if (data.user.role !== 'teacher' && data.user.role !== 'admin') {
+        router.replace('/mobile-input-tabs');
+        return;
+      }
+      
+      setUser(data.user);
+      await Promise.all([loadStudents(), loadSharedPosts()]);
+    } catch (error) {
+      console.error('Session check failed:', error);
+      router.replace('/login');
     } finally {
       setLoading(false);
     }
   };
 
-  const filteredPosts = () => {
-    let posts = [...allPosts];
+  const loadStudents = async () => {
+    try {
+      const studentsRes = await fetch('/api/get-students');
+      const studentsData = await studentsRes.json();
+      
+      const postsRes = await fetch('/api/get-all-posts');
+      const postsData = await postsRes.json();
+      
+      if (studentsData.success) {
+        const statsMap = new Map();
+        if (postsData.success && postsData.studentStats) {
+          postsData.studentStats.forEach(stat => {
+            statsMap.set(stat.userName, stat);
+          });
+        }
+        
+        // API側で施設順にソート済み
+        const enrichedStudents = studentsData.students.map(student => {
+          const stats = statsMap.get(student.username) || {
+            postCount: 0,
+            lastPostDate: null,
+            firstPostDate: null
+          };
+          
+          return {
+            userName: student.username,
+            postCount: stats.postCount || 0,
+            lastPostDate: stats.lastPostDate || null,
+            firstPostDate: stats.firstPostDate || null,
+            scheduleStartDate: student.scheduleStartDate,
+            primaryFacility: student.primaryFacility,
+            status: getActivityStatus(stats.lastPostDate),
+          };
+        });
+        
+        setStudents(enrichedStudents);
+      }
+    } catch (error) {
+      console.error('Failed to load students:', error);
+    }
+  };
+
+  const loadSharedPosts = async () => {
+    try {
+      const response = await fetch('/api/get-shared-posts');
+      const data = await response.json();
+      
+      if (data.success) {
+        setSharedPosts(data.posts || []);
+      }
+    } catch (error) {
+      console.error('Failed to load shared posts:', error);
+    }
+  };
+
+  const handleLike = async (postId) => {
+    if (!user) return;
     
-    // 学生でフィルター
-    if (selectedStudent) {
-      posts = posts.filter(post => post.userName === selectedStudent);
+    try {
+      const response = await fetch('/api/toggle-like', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ postId, userName: user.username })
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        if (likedPosts.includes(postId)) {
+          setLikedPosts(likedPosts.filter(id => id !== postId));
+        } else {
+          setLikedPosts([...likedPosts, postId]);
+        }
+        
+        setSharedPosts(sharedPosts.map(post => {
+          if (post.id === postId) {
+            const currentLikes = post.likes || 0;
+            return {
+              ...post,
+              likes: likedPosts.includes(postId) ? currentLikes - 1 : currentLikes + 1
+            };
+          }
+          return post;
+        }));
+      }
+    } catch (error) {
+      console.error('Failed to toggle like:', error);
+    }
+  };
+
+  const getActivityStatus = (lastPostDate) => {
+    if (!lastPostDate) return { color: '#9CA3AF', label: '未投稿', level: 0 };
+    
+    const now = new Date();
+    const lastDate = new Date(lastPostDate);
+    const diffMs = now - lastDate;
+    const diffHours = diffMs / (1000 * 60 * 60);
+    
+    if (diffHours <= 1) return { color: '#3B82F6', label: '1時間以内', level: 4 };
+    if (diffHours <= 3) return { color: '#10B981', label: '3時間以内', level: 3 };
+    if (diffHours <= 6) return { color: '#F59E0B', label: '6時間以内', level: 2 };
+    if (diffHours <= 24) return { color: '#F97316', label: '24時間以内', level: 1 };
+    return { color: '#9CA3AF', label: '1日以上', level: 0 };
+  };
+
+  const selectStudent = async (student) => {
+    setSelectedStudent(student);
+    setViewMode('timeline');
+    setPostsLoading(true);
+    
+    try {
+      const response = await fetch(`/api/get-all-posts?userName=${encodeURIComponent(student.userName)}`);
+      const data = await response.json();
+      
+      if (data.success) {
+        setStudentPosts(data.posts || []);
+      }
+    } catch (error) {
+      console.error('Failed to load student posts:', error);
+    } finally {
+      setPostsLoading(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+      router.replace('/');
+    } catch (error) {
+      console.error('Logout failed:', error);
+    }
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return '-';
+    const date = new Date(dateString);
+    return date.toLocaleString('ja-JP', {
+      month: 'numeric',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  const getFacilityName = (facilityId) => {
+    const names = {
+      'Rishiri': '利尻',
+      'Rebun': '礼文',
+      'Nayoro': '名寄',
+      'Shimizu': '清水',
+      'Sarabetsu': '更別'
+    };
+    return names[facilityId] || facilityId || '未設定';
+  };
+
+  const getCategoryLabel = (category) => {
+    // 番号の場合（1-12）
+    const numberLabels = {
+      1: '医療倫理',
+      2: '地域医療',
+      3: '医学的知識',
+      4: '診察・手技',
+      5: '問題解決能力',
+      6: '統合的臨床能力',
+      7: '多職種連携',
+      8: 'コミュニケーション',
+      9: '一般教養',
+      10: '保健・福祉',
+      11: '行政',
+      12: '社会医学'
+    };
+    
+    // 番号の場合
+    if (typeof category === 'number' || !isNaN(parseInt(category))) {
+      return numberLabels[parseInt(category)] || '未分類';
     }
     
-    // 日付でフィルター
-    if (dateRange.start) {
-      posts = posts.filter(post => new Date(post.timestamp) >= new Date(dateRange.start));
-    }
-    if (dateRange.end) {
-      posts = posts.filter(post => new Date(post.timestamp) <= new Date(dateRange.end));
-    }
-    
-    return posts;
+    // 英語キーの場合（旧形式互換）
+    const stringLabels = {
+      'anatomy': '解剖・構造',
+      'function': '機能・生理',
+      'assessment': '評価・検査',
+      'treatment': '治療・介入',
+      'communication': 'コミュニケーション',
+      'teamwork': '多職種連携',
+      'motivation': 'モチベーション',
+      'difficulty': '困難・課題',
+      'discovery': '発見・気づき',
+      'ethics': '倫理・態度',
+      'safety': '安全管理',
+      'reflection': '自己省察'
+    };
+    return stringLabels[category] || category || '未分類';
   };
 
-  const exportCSV = () => {
-    const posts = filteredPosts();
-    const headers = ['タイムスタンプ', 'ユーザー名', '投稿内容', 'カテゴリー', 'AI分類理由'];
-    const csvContent = [
-      headers.join(','),
-      ...posts.map(post => [
-        post.timestamp,
-        post.userName,
-        `"${post.text.replace(/"/g, '""')}"`,
-        post.category,
-        `"${post.reason.replace(/"/g, '""')}"`
-      ].join(','))
-    ].join('\n');
-
-    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `multas_export_${new Date().toISOString().split('T')[0]}.csv`;
-    link.click();
+  const getPostsByCategory = () => {
+    const grouped = {};
+    studentPosts.forEach(post => {
+      const cat = post.category || 'uncategorized';
+      if (!grouped[cat]) {
+        grouped[cat] = [];
+      }
+      grouped[cat].push(post);
+    });
+    return grouped;
   };
 
-  const categoryColors = {
-    1: '#FF6B6B', 2: '#4ECDC4', 3: '#45B7D1', 4: '#96CEB4',
-    5: '#FECA57', 6: '#48DBFB', 7: '#FF9FF3', 8: '#54A0FF',
-    9: '#5F27CD', 10: '#00D2D3', 11: '#EE5A24', 12: '#A29BFE'
-  };
-
-  const categoryNames = {
-    1: '診察・診断', 2: '治療・手技', 3: '検査・評価', 4: 'カルテ・書類',
-    5: 'カンファ', 6: '患者対応', 7: '他職種連携', 8: '知識・学習',
-    9: '症例・経験', 10: '振り返り', 11: '感情・成長', 12: 'その他'
-  };
+  if (loading) {
+    return (
+      <div style={styles.loadingContainer}>
+        <p>読み込み中...</p>
+      </div>
+    );
+  }
 
   return (
     <>
       <Head>
-        <title>教員ダッシュボード - MULTAs v3.4</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+        <title>教員ダッシュボード - MULTAs</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
       </Head>
 
-      <div className="dashboard-container">
-        <header className="dashboard-header">
-          <h1>MULTAs v3.4 教員ダッシュボード</h1>
-          <button onClick={fetchAllData} className="refresh-btn">
-            更新
-          </button>
+      <div style={styles.container}>
+        <header style={styles.header}>
+          <h1 style={styles.title}>教員ダッシュボード</h1>
+          <div style={styles.headerRight}>
+            <span style={styles.userName}>{user?.username}</span>
+            <button onClick={handleLogout} style={styles.logoutButton}>ログアウト</button>
+          </div>
         </header>
 
-        <nav className="dashboard-nav">
-          <button 
-            className={activeView === 'overview' ? 'active' : ''} 
-            onClick={() => setActiveView('overview')}
-          >
-            スタッツ概要
-          </button>
-          <button 
-            className={activeView === 'all-posts' ? 'active' : ''} 
-            onClick={() => setActiveView('all-posts')}
-          >
-            全投稿一覧
-          </button>
-          <button 
-            className={activeView === 'by-student' ? 'active' : ''} 
-            onClick={() => setActiveView('by-student')}
-          >
-            学生別
-          </button>
-          <button 
-            className={activeView === 'report' ? 'active' : ''} 
-            onClick={() => setActiveView('report')}
-          >
-            レポート
-          </button>
-        </nav>
-
-        <main className="dashboard-main">
-          {loading && <div className="loading">データを読み込み中...</div>}
-          {error && <div className="error">{error}</div>}
-          
-          {!loading && !error && (
+        <main style={styles.main}>
+          {!selectedStudent ? (
             <>
-              {activeView === 'overview' && (
-                <div className="overview-section">
-                  <h2>全学生スタッツ概要</h2>
-                  <div className="stats-summary">
-                    <div className="stat-card">
-                      <h3>総投稿数</h3>
-                      <p className="stat-number">{allPosts.length}</p>
-                    </div>
-                    <div className="stat-card">
-                      <h3>参加学生数</h3>
-                      <p className="stat-number">{studentStats.length}</p>
-                    </div>
-                  </div>
+              {/* メインタブ切替 */}
+              <div style={styles.mainTabContainer}>
+                <button
+                  onClick={() => setMainTab('students')}
+                  style={{
+                    ...styles.mainTabButton,
+                    ...(mainTab === 'students' ? styles.mainTabActive : {})
+                  }}
+                >
+                  学生一覧
+                </button>
+                <button
+                  onClick={() => setMainTab('shared')}
+                  style={{
+                    ...styles.mainTabButton,
+                    ...(mainTab === 'shared' ? styles.mainTabActive : {})
+                  }}
+                >
+                  みんなの学び
+                  {sharedPosts.length > 0 && (
+                    <span style={styles.tabBadge}>{sharedPosts.length}</span>
+                  )}
+                </button>
+              </div>
+
+              {mainTab === 'shared' ? (
+                <div style={styles.sharedSection}>
+                  <h2 style={styles.sectionTitle}>みんなの学び ({sharedPosts.length}件)</h2>
                   
-                  <table className="stats-table">
-                    <thead>
-                      <tr>
-                        <th>学生ID</th>
-                        <th>記録回数</th>
-                        <th>最終記録日時</th>
-                        <th>初回記録日時</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {studentStats.map((student, index) => (
-                        <tr key={index}>
-                          <td>{student.userName}</td>
-                          <td>{student.postCount}</td>
-                          <td>{new Date(student.lastPostDate).toLocaleString('ja-JP')}</td>
-                          <td>{new Date(student.firstPostDate).toLocaleString('ja-JP')}</td>
-                        </tr>
+                  {sharedPosts.length === 0 ? (
+                    <p style={styles.noData}>共有された投稿はまだありません</p>
+                  ) : (
+                    <div style={styles.sharedList}>
+                      {sharedPosts.map((post, index) => (
+                        <div key={post.id || index} style={styles.sharedCard}>
+                          <div style={styles.sharedHeader}>
+                            <span style={styles.sharedUser}>{post.userName}</span>
+                            <span style={styles.sharedDate}>{formatDate(post.sharedAt || post.timestamp)}</span>
+                          </div>
+                          <p style={styles.sharedText}>{post.text}</p>
+                          {post.category && (
+                            <span style={styles.categoryBadge}>
+                              {getCategoryLabel(post.category)}
+                            </span>
+                          )}
+                          <div style={styles.likeSection}>
+                            <button
+                              onClick={() => handleLike(post.id)}
+                              style={{
+                                ...styles.likeButton,
+                                ...(likedPosts.includes(post.id) ? styles.likedButton : {})
+                              }}
+                            >
+                              {likedPosts.includes(post.id) ? '❤️' : '🤍'} {post.likes || 0}
+                            </button>
+                          </div>
+                        </div>
                       ))}
-                    </tbody>
-                  </table>
+                    </div>
+                  )}
                 </div>
-              )}
-
-              {activeView === 'all-posts' && (
-                <div className="all-posts-section">
-                  <h2>全学生投稿一覧</h2>
-                  <div className="filter-controls">
-                    <button onClick={exportCSV} className="export-btn">
-                      CSVエクスポート
-                    </button>
-                  </div>
+              ) : (
+                <div style={styles.studentList}>
+                  <h2 style={styles.sectionTitle}>学生一覧 ({students.length}名)</h2>
                   
-                  <div className="posts-list">
-                    {allPosts.map((post, index) => (
-                      <div key={index} className="post-card">
-                        <div className="post-header">
-                          <span className="post-user">{post.userName}</span>
-                          <span className="post-time">{post.timestamp}</span>
-                        </div>
-                        <div className="post-content">{post.text}</div>
-                        <div className="post-footer">
-                          <span 
-                            className="category-badge" 
-                            style={{ backgroundColor: categoryColors[post.category] }}
-                          >
-                            {categoryNames[post.category]}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
+                  <div style={styles.statusLegend}>
+                    <span style={{...styles.legendItem, color: '#3B82F6'}}>● 1時間以内</span>
+                    <span style={{...styles.legendItem, color: '#10B981'}}>● 3時間以内</span>
+                    <span style={{...styles.legendItem, color: '#F59E0B'}}>● 6時間以内</span>
+                    <span style={{...styles.legendItem, color: '#9CA3AF'}}>● 1日以上/未投稿</span>
                   </div>
-                </div>
-              )}
 
-              {activeView === 'by-student' && (
-                <div className="by-student-section">
-                  <h2>学生別LIST</h2>
-                  <div className="student-selector">
-                    <select 
-                      value={selectedStudent || ''} 
-                      onChange={(e) => setSelectedStudent(e.target.value || null)}
-                    >
-                      <option value="">全学生</option>
-                      {studentStats.map((student, index) => (
-                        <option key={index} value={student.userName}>
-                          {student.userName} ({student.postCount}件)
-                        </option>
+                  {students.length === 0 ? (
+                    <p style={styles.noData}>登録された学生がいません</p>
+                  ) : (
+                    <div style={styles.studentGrid}>
+                      {students.map((student, index) => (
+                        <div
+                          key={index}
+                          style={styles.studentCard}
+                          onClick={() => selectStudent(student)}
+                        >
+                          <div style={styles.studentHeader}>
+                            <span 
+                              style={{
+                                ...styles.statusDot,
+                                backgroundColor: student.status.color
+                              }}
+                            />
+                            <span style={styles.studentName}>{student.userName}</span>
+                          </div>
+                      <div style={styles.studentFacility}>
+                        {getFacilityName(student.primaryFacility)}
+                      </div>
+                      <div style={styles.studentInfo}>
+                        <span style={styles.postCount}>投稿: {student.postCount}件</span>
+                        <span style={styles.lastPost}>
+                          最終: {formatDate(student.lastPostDate)}
+                        </span>
+                      </div>
+                        </div>
                       ))}
-                    </select>
-                  </div>
-                  
-                  <div className="posts-list">
-                    {filteredPosts().map((post, index) => (
-                      <div key={index} className="post-card">
-                        <div className="post-header">
-                          <span className="post-time">{post.timestamp}</span>
-                        </div>
-                        <div className="post-content">{post.text}</div>
-                        <div className="post-footer">
-                          <span 
-                            className="category-badge" 
-                            style={{ backgroundColor: categoryColors[post.category] }}
-                          >
-                            {categoryNames[post.category]}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {activeView === 'report' && (
-                <div className="report-section">
-                  <h2>期間指定レポート</h2>
-                  <div className="date-filters">
-                    <label>
-                      開始日:
-                      <input 
-                        type="date" 
-                        value={dateRange.start}
-                        onChange={(e) => setDateRange({...dateRange, start: e.target.value})}
-                      />
-                    </label>
-                    <label>
-                      終了日:
-                      <input 
-                        type="date" 
-                        value={dateRange.end}
-                        onChange={(e) => setDateRange({...dateRange, end: e.target.value})}
-                      />
-                    </label>
-                  </div>
-                  
-                  <div className="report-summary">
-                    <h3>期間内サマリー</h3>
-                    <p>投稿数: {filteredPosts().length}件</p>
-                    <button onClick={exportCSV} className="export-btn">
-                      期間内データをCSVエクスポート
-                    </button>
-                  </div>
-                  
-                  <div className="posts-list">
-                    {filteredPosts().map((post, index) => (
-                      <div key={index} className="post-card">
-                        <div className="post-header">
-                          <span className="post-user">{post.userName}</span>
-                          <span className="post-time">{post.timestamp}</span>
-                        </div>
-                        <div className="post-content">{post.text}</div>
-                      </div>
-                    ))}
-                  </div>
+                    </div>
+                  )}
                 </div>
               )}
             </>
+          ) : (
+            <div style={styles.studentDetail}>
+              <button 
+                onClick={() => setSelectedStudent(null)} 
+                style={styles.backButton}
+              >
+                ← 学生一覧に戻る
+              </button>
+
+              <div style={styles.detailHeader}>
+                <h2 style={styles.studentDetailName}>
+                  <span 
+                    style={{
+                      ...styles.statusDot,
+                      backgroundColor: selectedStudent.status.color
+                    }}
+                  />
+                  {selectedStudent.userName}
+                </h2>
+                <p style={styles.detailStats}>
+                  投稿数: {selectedStudent.postCount}件 | 
+                  最終投稿: {formatDate(selectedStudent.lastPostDate)}
+                </p>
+              </div>
+
+              <div style={styles.viewToggle}>
+                <button
+                  onClick={() => setViewMode('timeline')}
+                  style={{
+                    ...styles.toggleButton,
+                    ...(viewMode === 'timeline' ? styles.toggleActive : {})
+                  }}
+                >
+                  タイムライン
+                </button>
+                <button
+                  onClick={() => setViewMode('list')}
+                  style={{
+                    ...styles.toggleButton,
+                    ...(viewMode === 'list' ? styles.toggleActive : {})
+                  }}
+                >
+                  リスト
+                </button>
+                <button
+                  onClick={() => setViewMode('report')}
+                  style={{
+                    ...styles.toggleButton,
+                    ...(viewMode === 'report' ? styles.toggleActive : {})
+                  }}
+                >
+                  レポート
+                </button>
+              </div>
+
+              {postsLoading ? (
+                <p style={styles.loading}>投稿を読み込み中...</p>
+              ) : viewMode === 'timeline' ? (
+                <div style={styles.timeline}>
+                  {studentPosts.length === 0 ? (
+                    <p style={styles.noData}>投稿がありません</p>
+                  ) : (
+                    studentPosts.map((post, index) => (
+                      <div key={index} style={styles.postCard}>
+                        <div style={styles.postHeader}>
+                          <span style={styles.postDate}>
+                            {formatDate(post.timestamp)}
+                          </span>
+                          {post.category && (
+                            <span style={styles.categoryBadge}>
+                              {getCategoryLabel(post.category)}
+                            </span>
+                          )}
+                        </div>
+                        <p style={styles.postText}>{post.text}</p>
+                      </div>
+                    ))
+                  )}
+                </div>
+              ) : viewMode === 'list' ? (
+                <div style={styles.listView}>
+                  {studentPosts.length === 0 ? (
+                    <p style={styles.noData}>投稿がありません</p>
+                  ) : (
+                    Object.entries(getPostsByCategory()).map(([category, posts]) => (
+                      <div key={category} style={styles.categorySection}>
+                        <h3 style={styles.categoryTitle}>
+                          {getCategoryLabel(category)} ({posts.length})
+                        </h3>
+                        <div style={styles.categoryPosts}>
+                          {posts.map((post, index) => (
+                            <div key={index} style={styles.listPostCard}>
+                              <span style={styles.listPostDate}>{formatDate(post.timestamp)}</span>
+                              <p style={styles.listPostText}>{post.text}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              ) : (
+                <div style={styles.report}>
+                  {studentPosts.length > 0 ? (
+                    <>
+                      <RadarChart posts={studentPosts} />
+                      <div style={styles.reportStats}>
+                        <div style={styles.statCard}>
+                          <h3>総記録数</h3>
+                          <p style={styles.statNumber}>{studentPosts.length}</p>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <p style={styles.noData}>レポートを表示するには投稿が必要です</p>
+                  )}
+                </div>
+              )}
+            </div>
           )}
         </main>
       </div>
-
-      <style jsx>{`
-        .dashboard-container {
-          min-height: 100vh;
-          background-color: #f5f5f5;
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-        }
-
-        .dashboard-header {
-          background-color: #2196F3;
-          color: white;
-          padding: 20px;
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-        }
-
-        .dashboard-header h1 {
-          font-size: 24px;
-          margin: 0;
-        }
-
-        .refresh-btn {
-          background: rgba(255,255,255,0.2);
-          border: 1px solid white;
-          color: white;
-          padding: 8px 16px;
-          border-radius: 4px;
-          cursor: pointer;
-        }
-
-        .dashboard-nav {
-          background: white;
-          padding: 0;
-          display: flex;
-          border-bottom: 1px solid #e0e0e0;
-          overflow-x: auto;
-        }
-
-        .dashboard-nav button {
-          background: none;
-          border: none;
-          padding: 16px 24px;
-          cursor: pointer;
-          font-size: 16px;
-          border-bottom: 3px solid transparent;
-          white-space: nowrap;
-        }
-
-        .dashboard-nav button.active {
-          color: #2196F3;
-          border-bottom-color: #2196F3;
-        }
-
-        .dashboard-main {
-          padding: 20px;
-          max-width: 1200px;
-          margin: 0 auto;
-        }
-
-        .loading, .error {
-          text-align: center;
-          padding: 40px;
-          font-size: 18px;
-        }
-
-        .error {
-          color: #f44336;
-        }
-
-        .overview-section h2 {
-          margin-bottom: 20px;
-        }
-
-        .stats-summary {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-          gap: 20px;
-          margin-bottom: 30px;
-        }
-
-        .stat-card {
-          background: white;
-          padding: 20px;
-          border-radius: 8px;
-          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-          text-align: center;
-        }
-
-        .stat-card h3 {
-          margin: 0 0 10px 0;
-          color: #666;
-          font-size: 14px;
-        }
-
-        .stat-number {
-          font-size: 36px;
-          font-weight: bold;
-          color: #2196F3;
-          margin: 0;
-        }
-
-        .stats-table {
-          width: 100%;
-          background: white;
-          border-radius: 8px;
-          overflow: hidden;
-          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-
-        .stats-table th, .stats-table td {
-          padding: 12px;
-          text-align: left;
-          border-bottom: 1px solid #e0e0e0;
-        }
-
-        .stats-table th {
-          background: #f5f5f5;
-          font-weight: 600;
-        }
-
-        .filter-controls {
-          margin-bottom: 20px;
-          display: flex;
-          gap: 10px;
-          align-items: center;
-        }
-
-        .export-btn {
-          background: #4CAF50;
-          color: white;
-          border: none;
-          padding: 10px 20px;
-          border-radius: 4px;
-          cursor: pointer;
-          font-size: 14px;
-        }
-
-        .export-btn:hover {
-          background: #45a049;
-        }
-
-        .posts-list {
-          display: flex;
-          flex-direction: column;
-          gap: 16px;
-        }
-
-        .post-card {
-          background: white;
-          padding: 16px;
-          border-radius: 8px;
-          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-
-        .post-header {
-          display: flex;
-          justify-content: space-between;
-          margin-bottom: 8px;
-          font-size: 14px;
-          color: #666;
-        }
-
-        .post-user {
-          font-weight: 600;
-          color: #2196F3;
-        }
-
-        .post-content {
-          margin-bottom: 12px;
-          line-height: 1.6;
-        }
-
-        .post-footer {
-          display: flex;
-          gap: 8px;
-        }
-
-        .category-badge {
-          display: inline-block;
-          padding: 4px 12px;
-          border-radius: 16px;
-          color: white;
-          font-size: 12px;
-        }
-
-        .student-selector {
-          margin-bottom: 20px;
-        }
-
-        .student-selector select {
-          width: 100%;
-          max-width: 300px;
-          padding: 10px;
-          border: 1px solid #ddd;
-          border-radius: 4px;
-          font-size: 16px;
-        }
-
-        .date-filters {
-          display: flex;
-          gap: 20px;
-          margin-bottom: 20px;
-          flex-wrap: wrap;
-        }
-
-        .date-filters label {
-          display: flex;
-          flex-direction: column;
-          gap: 5px;
-        }
-
-        .date-filters input {
-          padding: 8px;
-          border: 1px solid #ddd;
-          border-radius: 4px;
-          font-size: 16px;
-        }
-
-        .report-summary {
-          background: white;
-          padding: 20px;
-          border-radius: 8px;
-          margin-bottom: 20px;
-          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-
-        .report-summary h3 {
-          margin: 0 0 10px 0;
-        }
-
-        @media (max-width: 768px) {
-          .dashboard-header h1 {
-            font-size: 18px;
-          }
-          
-          .dashboard-nav button {
-            padding: 12px 16px;
-            font-size: 14px;
-          }
-          
-          .dashboard-main {
-            padding: 16px;
-          }
-          
-          .stats-table {
-            font-size: 14px;
-          }
-          
-          .stats-table th, .stats-table td {
-            padding: 8px;
-          }
-        }
-      `}</style>
     </>
   );
 }
+
+const styles = {
+  container: {
+    minHeight: '100vh',
+    backgroundColor: '#F3F4F6',
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+  },
+  loadingContainer: {
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    height: '100vh',
+    fontSize: '16px',
+    color: '#666',
+  },
+  header: {
+    backgroundColor: '#1E40AF',
+    color: 'white',
+    padding: '16px 20px',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    position: 'sticky',
+    top: 0,
+    zIndex: 100,
+  },
+  title: {
+    margin: 0,
+    fontSize: '18px',
+    fontWeight: '600',
+  },
+  headerRight: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+  },
+  userName: {
+    fontSize: '14px',
+  },
+  logoutButton: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    color: 'white',
+    border: 'none',
+    padding: '6px 12px',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    fontSize: '12px',
+  },
+  main: {
+    padding: '16px',
+    maxWidth: '800px',
+    margin: '0 auto',
+  },
+  mainTabContainer: {
+    display: 'flex',
+    backgroundColor: 'white',
+    borderRadius: '8px',
+    padding: '4px',
+    marginBottom: '16px',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+  },
+  mainTabButton: {
+    flex: 1,
+    padding: '12px',
+    border: 'none',
+    backgroundColor: 'transparent',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontSize: '14px',
+    fontWeight: '600',
+    color: '#6B7280',
+    transition: 'all 0.2s',
+  },
+  mainTabActive: {
+    backgroundColor: '#1E40AF',
+    color: 'white',
+  },
+  tabBadge: {
+    backgroundColor: '#EF4444',
+    color: 'white',
+    fontSize: '11px',
+    fontWeight: '600',
+    padding: '2px 6px',
+    borderRadius: '10px',
+    marginLeft: '6px',
+  },
+  sharedSection: {},
+  sharedList: {
+    display: 'grid',
+    gap: '12px',
+  },
+  sharedCard: {
+    backgroundColor: 'white',
+    borderRadius: '8px',
+    padding: '14px',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+  },
+  sharedHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '8px',
+  },
+  sharedUser: {
+    fontWeight: '600',
+    color: '#1E40AF',
+    fontSize: '14px',
+  },
+  sharedDate: {
+    fontSize: '12px',
+    color: '#9CA3AF',
+  },
+  sharedText: {
+    fontSize: '14px',
+    lineHeight: '1.6',
+    color: '#374151',
+    margin: '0 0 10px 0',
+    whiteSpace: 'pre-wrap',
+  },
+  likeSection: {
+    display: 'flex',
+    alignItems: 'center',
+    marginTop: '8px',
+  },
+  likeButton: {
+    backgroundColor: '#F3F4F6',
+    border: 'none',
+    padding: '6px 12px',
+    borderRadius: '16px',
+    cursor: 'pointer',
+    fontSize: '14px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+  },
+  likedButton: {
+    backgroundColor: '#FEE2E2',
+  },
+  studentList: {},
+  sectionTitle: {
+    fontSize: '16px',
+    fontWeight: '600',
+    marginBottom: '12px',
+    color: '#374151',
+  },
+  statusLegend: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '12px',
+    marginBottom: '16px',
+    fontSize: '12px',
+  },
+  legendItem: {
+    display: 'flex',
+    alignItems: 'center',
+  },
+  studentGrid: {
+    display: 'grid',
+    gap: '12px',
+  },
+  studentCard: {
+    backgroundColor: 'white',
+    borderRadius: '8px',
+    padding: '14px',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+    cursor: 'pointer',
+    transition: 'transform 0.1s, box-shadow 0.1s',
+  },
+  studentHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    marginBottom: '8px',
+  },
+  statusDot: {
+    width: '12px',
+    height: '12px',
+    borderRadius: '50%',
+    flexShrink: 0,
+  },
+  studentName: {
+    fontSize: '16px',
+    fontWeight: '600',
+    color: '#1F2937',
+  },
+  studentFacility: {
+    fontSize: '12px',
+    color: '#6B7280',
+    backgroundColor: '#F3F4F6',
+    padding: '2px 8px',
+    borderRadius: '4px',
+    marginBottom: '6px',
+    display: 'inline-block',
+  },
+  studentInfo: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    fontSize: '13px',
+    color: '#6B7280',
+  },
+  postCount: {},
+  lastPost: {},
+  noData: {
+    textAlign: 'center',
+    color: '#9CA3AF',
+    padding: '40px 20px',
+  },
+  studentDetail: {},
+  backButton: {
+    backgroundColor: 'transparent',
+    border: 'none',
+    color: '#1E40AF',
+    fontSize: '14px',
+    cursor: 'pointer',
+    padding: '8px 0',
+    marginBottom: '12px',
+  },
+  detailHeader: {
+    backgroundColor: 'white',
+    borderRadius: '8px',
+    padding: '16px',
+    marginBottom: '16px',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+  },
+  studentDetailName: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    fontSize: '20px',
+    fontWeight: '600',
+    margin: '0 0 8px 0',
+    color: '#1F2937',
+  },
+  detailStats: {
+    fontSize: '14px',
+    color: '#6B7280',
+    margin: 0,
+  },
+  viewToggle: {
+    display: 'flex',
+    backgroundColor: 'white',
+    borderRadius: '8px',
+    padding: '4px',
+    marginBottom: '16px',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+  },
+  toggleButton: {
+    flex: 1,
+    padding: '10px',
+    border: 'none',
+    backgroundColor: 'transparent',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontSize: '14px',
+    fontWeight: '500',
+    color: '#6B7280',
+    transition: 'all 0.2s',
+  },
+  toggleActive: {
+    backgroundColor: '#1E40AF',
+    color: 'white',
+  },
+  loading: {
+    textAlign: 'center',
+    color: '#6B7280',
+    padding: '20px',
+  },
+  timeline: {
+    display: 'grid',
+    gap: '12px',
+  },
+  postCard: {
+    backgroundColor: 'white',
+    borderRadius: '8px',
+    padding: '14px',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+  },
+  postHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '8px',
+  },
+  postDate: {
+    fontSize: '12px',
+    color: '#9CA3AF',
+  },
+  categoryBadge: {
+    fontSize: '11px',
+    backgroundColor: '#E0E7FF',
+    color: '#3730A3',
+    padding: '2px 8px',
+    borderRadius: '12px',
+  },
+  postText: {
+    fontSize: '14px',
+    lineHeight: '1.6',
+    color: '#374151',
+    margin: 0,
+    whiteSpace: 'pre-wrap',
+  },
+  listView: {
+    display: 'grid',
+    gap: '16px',
+  },
+  categorySection: {
+    backgroundColor: 'white',
+    borderRadius: '8px',
+    padding: '16px',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+  },
+  categoryTitle: {
+    fontSize: '14px',
+    fontWeight: '600',
+    color: '#1E40AF',
+    marginBottom: '12px',
+    paddingBottom: '8px',
+    borderBottom: '2px solid #E0E7FF',
+  },
+  categoryPosts: {
+    display: 'grid',
+    gap: '8px',
+  },
+  listPostCard: {
+    backgroundColor: '#F9FAFB',
+    padding: '10px 12px',
+    borderRadius: '6px',
+    borderLeft: '3px solid #1E40AF',
+  },
+  listPostDate: {
+    fontSize: '11px',
+    color: '#9CA3AF',
+    display: 'block',
+    marginBottom: '4px',
+  },
+  listPostText: {
+    fontSize: '13px',
+    lineHeight: '1.5',
+    color: '#374151',
+    margin: 0,
+  },
+  report: {
+    backgroundColor: 'white',
+    borderRadius: '8px',
+    padding: '16px',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+  },
+  reportStats: {
+    marginTop: '16px',
+  },
+  statCard: {
+    textAlign: 'center',
+    padding: '16px',
+    backgroundColor: '#F9FAFB',
+    borderRadius: '8px',
+  },
+  statNumber: {
+    fontSize: '32px',
+    fontWeight: '700',
+    color: '#1E40AF',
+    margin: '8px 0 0 0',
+  },
+};

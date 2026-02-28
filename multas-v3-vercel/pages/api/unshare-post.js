@@ -27,15 +27,15 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { postId, userId, action } = req.body;
+    const { postId, userName } = req.body;
 
-    if (!postId || !userId || !action) {
-      return res.status(400).json({ error: 'Missing required fields' });
+    if (!postId) {
+      return res.status(400).json({ error: 'Missing postId' });
     }
 
     const sharedPosts = loadSharedPosts();
     
-    // 投稿IDと一致する投稿を探す
+    // 投稿を検索
     const postIndex = sharedPosts.findIndex(p => p.id === postId);
 
     if (postIndex === -1) {
@@ -43,39 +43,25 @@ export default async function handler(req, res) {
     }
 
     const post = sharedPosts[postIndex];
-    
-    // 現在のいいねデータを取得
-    const currentLikes = post.likes || {};
-    
-    // いいねの追加/削除
-    if (action === 'like') {
-      currentLikes[userId] = true;
-    } else if (action === 'unlike') {
-      delete currentLikes[userId];
+
+    // 投稿者本人またはadminのみ削除可能
+    if (post.userName !== userName && post.sharedBy !== userName && userName !== 'admin') {
+      return res.status(403).json({ error: 'Permission denied' });
     }
 
-    // いいね数を計算
-    const likeCount = Object.keys(currentLikes).length;
-
-    // 更新
-    sharedPosts[postIndex] = {
-      ...post,
-      likes: currentLikes,
-      likeCount: likeCount
-    };
-
+    // 投稿を削除
+    sharedPosts.splice(postIndex, 1);
     saveSharedPosts(sharedPosts);
 
     res.status(200).json({ 
       success: true,
-      likes: currentLikes,
-      likeCount: likeCount
+      message: '共有を解除しました'
     });
 
   } catch (error) {
-    console.error('Error toggling like:', error);
+    console.error('Error unsharing post:', error);
     res.status(500).json({ 
-      error: 'Failed to toggle like',
+      error: 'Failed to unshare post',
       details: error.message 
     });
   }

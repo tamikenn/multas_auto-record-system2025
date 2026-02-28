@@ -28,3 +28,13 @@ yarn-error.log*
 
 # vercel
 .vercel
+
+# data files (contain user data)
+/data/users.json
+/data/shared-posts.json
+/data/login-history.json
+/data/backups/
+/data/~$*.xlsx
+
+# Excel temp files
+~$*.xlsx

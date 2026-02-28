@@ -1,4 +1,33 @@
-import { google } from 'googleapis';
+import fs from 'fs';
+import path from 'path';
+
+const DATA_DIR = path.join(process.cwd(), 'data');
+const SHARED_POSTS_FILE = path.join(DATA_DIR, 'shared-posts.json');
+
+function ensureDataDir() {
+  if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+  }
+}
+
+function loadSharedPosts() {
+  ensureDataDir();
+  if (!fs.existsSync(SHARED_POSTS_FILE)) {
+    return [];
+  }
+  try {
+    const data = fs.readFileSync(SHARED_POSTS_FILE, 'utf-8');
+    return JSON.parse(data);
+  } catch (error) {
+    console.error('Error loading shared posts:', error);
+    return [];
+  }
+}
+
+function saveSharedPosts(posts) {
+  ensureDataDir();
+  fs.writeFileSync(SHARED_POSTS_FILE, JSON.stringify(posts, null, 2), 'utf-8');
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -8,40 +37,41 @@ export default async function handler(req, res) {
   try {
     const { post } = req.body;
 
-    if (!post || !post.text || !post.userName) {
-      return res.status(400).json({ error: 'Missing required fields' });
+    if (!post || !post.text) {
+      console.log('Share post validation failed:', { post });
+      return res.status(400).json({ error: 'Missing required fields', details: { hasPost: !!post, hasText: !!post?.text, hasUserName: !!post?.userName } });
+    }
+    
+    // userNameが無い場合はsharedByを使用
+    const userName = post.userName || post.sharedBy || 'Unknown';
+
+    const sharedPosts = loadSharedPosts();
+    
+    // 重複チェック（同じIDの投稿がないか）
+    const existingIndex = sharedPosts.findIndex(p => p.id === post.id);
+    if (existingIndex !== -1) {
+      return res.status(200).json({ 
+        success: true,
+        message: 'この投稿は既に共有されています'
+      });
     }
 
-    // Google Sheets認証設定
-    const credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS);
-    const auth = new google.auth.GoogleAuth({
-      credentials,
-      scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-    });
-
-    const sheets = google.sheets({ version: 'v4', auth });
-    const spreadsheetId = process.env.GOOGLE_SPREADSHEET_ID;
-
-    // 共有投稿用のシートに書き込み（Sharedシート）
-    const timestamp = new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
-    const values = [[
+    const timestamp = new Date().toISOString();
+    const newSharedPost = {
+      id: post.id || `shared_${Date.now()}_${userName}`,
       timestamp,
-      post.id || `${Date.now()}_${post.userName}`,
-      post.userName,
-      post.text,
-      post.category || '',
-      post.reason || '',
-      post.date || timestamp,
-      JSON.stringify(post.likes || {}),
-      0 // likeCount
-    ]];
+      userName: userName,
+      sharedBy: post.sharedBy || userName,
+      text: post.text,
+      category: post.category || '',
+      reason: post.reason || '',
+      date: post.date || post.timestamp || timestamp,
+      likes: post.likes || {},
+      likeCount: post.likeCount || 0
+    };
 
-    await sheets.spreadsheets.values.append({
-      spreadsheetId,
-      range: 'Shared!A:I',
-      valueInputOption: 'USER_ENTERED',
-      requestBody: { values },
-    });
+    sharedPosts.unshift(newSharedPost);
+    saveSharedPosts(sharedPosts);
 
     res.status(200).json({ 
       success: true,

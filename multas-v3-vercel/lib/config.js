@@ -64,7 +64,7 @@ export const BACKUP_CONFIG = {
   /** バックアップの最大保持日数 */
   maxAgeDays: 30,
   /** 最低保持するバックアップ数 */
-  minKeepCount: 3,
+  minKeepCount: 10,
   /** バックアップ作成の最小間隔（ミリ秒） */
   minIntervalMs: 60000, // 1分
 };
@@ -275,3 +275,71 @@ export function getJapanTimestamp() {
 export function generateId(prefix = 'post') {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
+
+// =============================================================================
+// 協力施設マスタ
+// =============================================================================
+
+/**
+ * 協力施設一覧
+ */
+export const FACILITIES = {
+  Shimizu: {
+    id: 'Shimizu',
+    name: '清水赤十字病院',
+    active: false
+  },
+  Sarabetsu: {
+    id: 'Sarabetsu',
+    name: '更別村国民健康保険診療所',
+    active: false
+  },
+  Rishiri: {
+    id: 'Rishiri',
+    name: '利尻島国保中央病院',
+    active: true
+  },
+  Rebun: {
+    id: 'Rebun',
+    name: '礼文町国民健康保険 船泊診療所',
+    active: true
+  },
+  Nayoro: {
+    id: 'Nayoro',
+    name: '名寄市立病院',
+    active: true
+  }
+};
+
+/**
+ * 現在アクティブな施設のみ取得
+ * @returns {Object}
+ */
+export function getActiveFacilities() {
+  return Object.fromEntries(
+    Object.entries(FACILITIES).filter(([_, f]) => f.active)
+  );
+}
+
+/**
+ * 施設IDから施設名を取得
+ * @param {string} facilityId
+ * @returns {string}
+ */
+export function getFacilityName(facilityId) {
+  return FACILITIES[facilityId]?.name || facilityId;
+}
+
+// =============================================================================
+// ユーザー権限
+// =============================================================================
+
+/**
+ * ユーザー権限一覧
+ */
+export const USER_ROLES = {
+  admin: { id: 'admin', name: '管理者', canPost: true, canEdit: true, canManageUsers: true, viewScope: 'all' },
+  teacher: { id: 'teacher', name: '教員', canPost: false, canEdit: false, canManageUsers: false, viewScope: 'all' },
+  facility: { id: 'facility', name: '協力施設', canPost: false, canEdit: false, canManageUsers: false, viewScope: 'facility' },
+  student: { id: 'student', name: '学生', canPost: true, canEdit: true, canManageUsers: false, viewScope: 'self' }
+};

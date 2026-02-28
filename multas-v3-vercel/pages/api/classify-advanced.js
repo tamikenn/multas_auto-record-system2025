@@ -1,46 +1,28 @@
 import OpenAI from 'openai';
+import { 
+  CATEGORIES, 
+  generateClassificationPrompt, 
+  getCategoryShortName 
+} from '../../lib/classification-config.js';
 
-// LocalLLM（Ollama）を使用した分類
+// LocalLLM（Ollama）を使用した高速分類（番号のみ）
 async function classifySingleElementWithLocalLLM(text) {
   const ollamaUrl = process.env.LOCAL_LLM_API_URL || 'http://localhost:11434/api/generate';
   const model = process.env.LOCAL_LLM_MODEL_CLASSIFY || 'qwen2.5:7b';
   
-  const prompt = `あなたは地域医療実習の体験を分類する専門家です。
-以下の学生の体験を、12時計のカテゴリのいずれかに分類してください。
-
-カテゴリ:
-1時: 医療倫理
-2時: 地域医療
-3時: 医学的知識
-4時: 診察・手技
-5時: 問題解決能力
-6時: 統合的な臨床能力
-7時: 多職種連携
-8時: コミュニケーションスキル
-9時: 社会常識・一般教養
-10時: 保健・福祉
-11時: 行政
-12時: 社会医学/公衆衛生
-
-体験内容:
-${text}
-
-以下の形式で回答してください:
-カテゴリ: [1-12の数字]
-理由: [分類の理由を簡潔に]`;
+  // 設定ファイルからプロンプトを生成
+  const prompt = generateClassificationPrompt(text);
 
   const response = await fetch(ollamaUrl, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: model,
       prompt: prompt,
       stream: false,
       options: {
-        temperature: 0.3,
-        num_predict: 200,
+        temperature: 0.1,
+        num_predict: 5,  // 番号のみなので最小限
       }
     })
   });
@@ -52,12 +34,14 @@ ${text}
   const data = await response.json();
   const content = data.response ? data.response.trim() : '';
   
-  const categoryMatch = content.match(/カテゴリ[：:]?\s*(\d+)/);
-  const reasonMatch = content.match(/理由[：:]?\s*(.+)/);
+  // 番号を抽出
+  const match = content.match(/(\d+)/);
+  const category = match ? parseInt(match[1]) : 8;
+  const validCategory = (category >= 1 && category <= 12) ? category : 8;
 
   return {
-    category: categoryMatch ? parseInt(categoryMatch[1]) : 8,
-    reason: reasonMatch ? reasonMatch[1].trim() : "LocalLLM分類",
+    category: validCategory,
+    reason: CATEGORIES[validCategory]?.name || 'AI分類',
     confidence: 0.8
   };
 }
@@ -125,41 +109,26 @@ async function classifySingleElement(text) {
   }
 }
 
-// LocalLLMを使用した要素分解
+// LocalLLMを使用した高速要素分解
 async function analyzeMultipleElementsWithLocalLLM(text) {
   const ollamaUrl = process.env.LOCAL_LLM_API_URL || 'http://localhost:11434/api/generate';
-  const model = process.env.LOCAL_LLM_MODEL_REPORT || 'qwen2.5:14b'; // 要素分解には大きいモデルを使用
+  const model = process.env.LOCAL_LLM_MODEL_CLASSIFY || 'qwen2.5:7b'; // 高速化のため7Bを使用
   
-  const prompt = `あなたは地域医療実習の体験を分析する専門家です。
-以下の長文の体験記録を読み、含まれている複数の学習要素を抽出してください。
-それぞれの要素について、独立した学習項目として分類可能な単位で分割してください。
-
-重要な指示:
-- 各要素は自然な日本語で簡潔にまとめてください
-- 「〜体験」「〜経験」という語尾を避け、多様な表現を使ってください
-- 動詞の終止形（〜した、〜学んだ、〜気づいた等）や体言止めを活用してください
-- 元の文章の重要なポイントを保持しつつ、読みやすく整理してください
-
-体験内容:
-${text}
-
-以下の形式で、含まれている要素を列挙してください（最大5つまで）:
-要素1: [抽出した内容を自然な日本語で]
-要素2: [抽出した内容を自然な日本語で]
-...`;
+  // 高速化: 簡潔なプロンプト
+  const prompt = `長文を最大3つの学習要素に分解。各要素を1行で簡潔に。
+体験:${text.substring(0, 300)}
+要素1:`;
 
   const response = await fetch(ollamaUrl, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: model,
       prompt: prompt,
       stream: false,
       options: {
         temperature: 0.3,
-        num_predict: 500,
+        num_predict: 200,  // 短縮
       }
     })
   });
@@ -169,29 +138,32 @@ ${text}
   }
 
   const data = await response.json();
-  const content = data.response ? data.response.trim() : '';
+  const content = '要素1:' + (data.response ? data.response.trim() : '');
   
   const elements = [];
   
   // 要素を抽出
-  const elementMatches = content.matchAll(/要素\d+[：:]?\s*(.+)/g);
-  for (const match of elementMatches) {
-    const elementText = match[1].trim();
-    if (elementText && elementText.length > 10) {
-      // 各要素を個別に分類
-      const classification = await classifySingleElement(elementText);
-      elements.push({
-        text: elementText,
-        ...classification
-      });
+  const lines = content.split('\n');
+  for (const line of lines) {
+    const match = line.match(/要素\d+[：:]?\s*(.+)/);
+    if (match) {
+      const elementText = match[1].trim();
+      if (elementText && elementText.length > 5) {
+        // 各要素を個別に高速分類
+        const classification = await classifySingleElementWithLocalLLM(elementText);
+        elements.push({
+          text: elementText,
+          ...classification
+        });
+      }
     }
   }
 
   // 要素が見つからない場合は全体を1つの要素として扱う
   if (elements.length === 0) {
-    const classification = await classifySingleElement(text);
+    const classification = await classifySingleElementWithLocalLLM(text);
     elements.push({
-      text: text.substring(0, 100) + '...',
+      text: text.substring(0, 80),
       ...classification
     });
   }
@@ -323,8 +295,8 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 長文判定（200文字以上）
-    const isLongText = text.length > 200;
+    // 長文判定（300文字以上に閾値を上げて高速化）
+    const isLongText = text.length > 300;
     
     if (isLongText) {
       // 長文の場合は要素分解

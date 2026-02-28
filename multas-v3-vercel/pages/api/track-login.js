@@ -1,4 +1,36 @@
-import { google } from 'googleapis';
+import fs from 'fs';
+import path from 'path';
+
+const DATA_DIR = path.join(process.cwd(), 'data');
+const LOGIN_HISTORY_FILE = path.join(DATA_DIR, 'login-history.json');
+
+function loadLoginHistory() {
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    if (fs.existsSync(LOGIN_HISTORY_FILE)) {
+      const data = fs.readFileSync(LOGIN_HISTORY_FILE, 'utf-8');
+      return JSON.parse(data);
+    }
+  } catch (error) {
+    console.error('Error loading login history:', error);
+  }
+  return [];
+}
+
+function saveLoginHistory(history) {
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    fs.writeFileSync(LOGIN_HISTORY_FILE, JSON.stringify(history, null, 2), 'utf-8');
+    return true;
+  } catch (error) {
+    console.error('Error saving login history:', error);
+    return false;
+  }
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -12,32 +44,25 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    // Google Sheets認証設定
-    const credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS);
-    const auth = new google.auth.GoogleAuth({
-      credentials,
-      scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-    });
-
-    const sheets = google.sheets({ version: 'v4', auth });
-    const spreadsheetId = process.env.GOOGLE_SPREADSHEET_ID;
-
-    // ログイン履歴を記録（LoginHistoryシート）
+    const history = loadLoginHistory();
+    
     const timestamp = new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
-    const values = [[
+    const entry = {
       timestamp,
       userName,
-      action, // 'login' or 'logout'
-      req.headers['user-agent'], // デバイス情報
-      req.headers['x-forwarded-for'] || req.connection.remoteAddress // IPアドレス（参考用）
-    ]];
-
-    await sheets.spreadsheets.values.append({
-      spreadsheetId,
-      range: 'LoginHistory!A:E',
-      valueInputOption: 'USER_ENTERED',
-      requestBody: { values },
-    });
+      action,
+      userAgent: req.headers['user-agent'] || '',
+      ip: req.headers['x-forwarded-for'] || req.socket?.remoteAddress || ''
+    };
+    
+    history.push(entry);
+    
+    // 最新1000件のみ保持
+    if (history.length > 1000) {
+      history.splice(0, history.length - 1000);
+    }
+    
+    saveLoginHistory(history);
 
     res.status(200).json({ 
       success: true,
@@ -46,18 +71,10 @@ export default async function handler(req, res) {
 
   } catch (error) {
     console.error('Error tracking login:', error);
-    
-    // LoginHistoryシートが存在しない場合は作成を試みる
-    if (error.message && error.message.includes('Unable to parse range')) {
-      res.status(200).json({ 
-        success: true,
-        message: 'Login tracking will be available after sheet creation'
-      });
-    } else {
-      res.status(500).json({ 
-        error: 'Failed to track login',
-        details: error.message 
-      });
-    }
+    // エラーが発生してもログイン処理自体は妨げない
+    res.status(200).json({ 
+      success: true,
+      message: 'Login tracking skipped due to error'
+    });
   }
 }

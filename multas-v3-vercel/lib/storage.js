@@ -263,5 +263,89 @@ export const storage = {
       currentExp: updatedGameData.exp,
       expToNextLevel: updatedGameData.expToNextLevel
     };
+  },
+
+  // シェアされた投稿の管理
+  loadSharedPosts: () => {
+    try {
+      if (typeof window !== 'undefined') {
+        const data = localStorage.getItem('multas_v3_shared_posts');
+        return data ? JSON.parse(data) : [];
+      }
+    } catch (error) {
+      console.error('シェア投稿読み込みエラー:', error);
+      return [];
+    }
+    return [];
+  },
+
+  saveSharedPosts: (posts) => {
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('multas_v3_shared_posts', JSON.stringify(posts));
+      }
+    } catch (error) {
+      console.error('シェア投稿保存エラー:', error);
+    }
+  },
+
+  // いいねした投稿の管理
+  getLikedPosts: () => {
+    try {
+      if (typeof window !== 'undefined') {
+        const user = storage.getCurrentUser();
+        if (!user) return [];
+        const key = `multas_v3_liked_${user.username}`;
+        const data = localStorage.getItem(key);
+        return data ? JSON.parse(data) : [];
+      }
+    } catch (error) {
+      console.error('いいね読み込みエラー:', error);
+      return [];
+    }
+    return [];
+  },
+
+  setLikedPosts: (postIds) => {
+    try {
+      if (typeof window !== 'undefined') {
+        const user = storage.getCurrentUser();
+        if (!user) return;
+        const key = `multas_v3_liked_${user.username}`;
+        localStorage.setItem(key, JSON.stringify(postIds));
+      }
+    } catch (error) {
+      console.error('いいね保存エラー:', error);
+    }
+  },
+
+  // シェア投稿を追加
+  addSharedPost: (post) => {
+    try {
+      const sharedPosts = storage.loadSharedPosts();
+      const exists = sharedPosts.some(p => p.id === post.id);
+      if (!exists) {
+        sharedPosts.unshift(post);
+        storage.saveSharedPosts(sharedPosts);
+      }
+    } catch (error) {
+      console.error('シェア投稿追加エラー:', error);
+    }
+  },
+
+  // いいねトグル
+  toggleLike: (postId) => {
+    try {
+      const likedPosts = storage.getLikedPosts();
+      const index = likedPosts.indexOf(postId);
+      if (index === -1) {
+        likedPosts.push(postId);
+      } else {
+        likedPosts.splice(index, 1);
+      }
+      storage.setLikedPosts(likedPosts);
+    } catch (error) {
+      console.error('いいねトグルエラー:', error);
+    }
   }
 };

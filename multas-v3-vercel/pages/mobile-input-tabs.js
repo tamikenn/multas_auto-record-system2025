@@ -21,33 +21,127 @@ export default function MobileInputTabs() {
   const [editText, setEditText] = useState('');
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
+  const [userRole, setUserRole] = useState(null);
   const [showLogin, setShowLogin] = useState(false);
   const [loginName, setLoginName] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [loginLoading, setLoginLoading] = useState(false);
   const [shareConfirmPost, setShareConfirmPost] = useState(null);
   const [sharedPosts, setSharedPosts] = useState([]);
   const [likedPosts, setLikedPosts] = useState([]);
   const [reportDate, setReportDate] = useState('all'); // レポート用の日付フィルター
+  const [listDate, setListDate] = useState('all'); // LIST用の日付フィルター
   const [syncStatus, setSyncStatus] = useState(null); // 同期状態
+  const [showScheduleSetup, setShowScheduleSetup] = useState(false); // スケジュール設定画面
+  const [showUserInfoDropdown, setShowUserInfoDropdown] = useState(false); // ユーザー情報ドロップダウン
+  const [showPasswordChange, setShowPasswordChange] = useState(false); // パスワード変更モーダル
+  const [passwordChangeData, setPasswordChangeData] = useState({ current: '', new: '', confirm: '' });
+  const [passwordChangeError, setPasswordChangeError] = useState('');
+  const [scheduleStartDate, setScheduleStartDate] = useState(''); // 実習開始日（月曜日）
+  const [scheduleData, setScheduleData] = useState({
+    day1: '', day2: '', day3: '', day4: '', day5: ''
+  });
   const mainRef = useRef(null);
   
   const tabs = ['LOG', 'LIST', 'REPORT', 'みんな'];
   
 
-  // 初回読み込み時にローカルストレージからデータを復元
+  // 初回読み込み時にセッションを確認
   useEffect(() => {
     setIsClient(true);
     
-    // ユーザー情報を読み込み
-    const savedUser = storage.getCurrentUser();
-    if (!savedUser) {
-      setShowLogin(true);
-      // ログインしていない場合は、初期値を確実に設定
-      setPosts([]);
-      setSharedPosts([]);
-      setLikedPosts([]);
-    } else {
-      setCurrentUser(savedUser);
-      // ログイン済みの場合、ユーザーの投稿を読み込み
+    // セッション確認
+    const checkSession = async () => {
+      try {
+        const response = await fetch('/api/auth/session');
+        const data = await response.json();
+        
+        if (data.authenticated && data.user) {
+          // 教員ユーザーは教員ダッシュボードにリダイレクト
+          if (data.user.role === 'teacher') {
+            window.location.href = '/teacher-dashboard';
+            return;
+          }
+          
+          // 施設ユーザーは専用ページにリダイレクト
+          if (data.user.role === 'facility') {
+            window.location.href = '/facility-view';
+            return;
+          }
+          setCurrentUser(data.user.username);
+          setUserRole(data.user.role);
+          storage.setCurrentUser(data.user.username);
+          
+          // 学生の場合、スケジュール確認
+          if (data.user.role === 'student') {
+            await checkSchedule();
+          }
+          
+          loadUserData(data.user.username);
+        } else {
+          setShowLogin(true);
+          setPosts([]);
+          setSharedPosts([]);
+          setLikedPosts([]);
+        }
+      } catch (error) {
+        console.error('Session check error:', error);
+        setShowLogin(true);
+        setPosts([]);
+        setSharedPosts([]);
+        setLikedPosts([]);
+      }
+    };
+    
+    checkSession();
+  }, []);
+  
+  // スケジュール確認
+  const checkSchedule = async () => {
+    try {
+      const response = await fetch('/api/auth/schedule');
+      const data = await response.json();
+      
+      if (!data.hasSchedule) {
+        setShowScheduleSetup(true);
+      } else {
+        setScheduleData(data.schedule);
+        if (data.startDate) {
+          setScheduleStartDate(data.startDate);
+        }
+      }
+    } catch (error) {
+      console.error('Schedule check error:', error);
+    }
+  };
+  
+  // 開始日から5日間の日付を計算
+  const getWeekDates = (startDateStr) => {
+    if (!startDateStr) return [];
+    const dates = [];
+    const start = new Date(startDateStr);
+    for (let i = 0; i < 5; i++) {
+      const date = new Date(start);
+      date.setDate(start.getDate() + i);
+      dates.push({
+        dayNum: i + 1,
+        date: date,
+        dateStr: date.toLocaleDateString('ja-JP', { month: 'long', day: 'numeric', weekday: 'short' })
+      });
+    }
+    return dates;
+  };
+  
+  // 月曜日かどうかチェック
+  const isMonday = (dateStr) => {
+    const date = new Date(dateStr);
+    return date.getDay() === 1;
+  };
+
+  // ユーザーデータを読み込む関数
+  const loadUserData = (username) => {
+    if (username) {
       const savedPosts = storage.loadPosts() || [];
       setPosts(savedPosts);
       
@@ -61,7 +155,6 @@ export default function MobileInputTabs() {
         })
         .catch(error => {
           console.error('Error loading shared posts:', error);
-          // フォールバック: ローカルストレージから読み込み
           const savedSharedPosts = storage.loadSharedPosts() || [];
           setSharedPosts(savedSharedPosts);
         });
@@ -70,66 +163,147 @@ export default function MobileInputTabs() {
       const savedLikedPosts = storage.getLikedPosts() || [];
       setLikedPosts(savedLikedPosts);
     }
-  }, []);
+  };
+  
+  // スケジュール保存
+  const handleSaveSchedule = async () => {
+    if (!scheduleStartDate) {
+      alert('実習開始日を入力してください');
+      return;
+    }
+    
+    if (!isMonday(scheduleStartDate)) {
+      alert('実習開始日は月曜日を選択してください');
+      return;
+    }
+    
+    // admin/facilityの場合は施設選択なしでもOK（日付のみでレポート機能を使用）
+    const hasAnyFacility = Object.values(scheduleData).some(f => f);
+    const isStudentRole = userRole === 'student';
+    
+    if (isStudentRole && !hasAnyFacility) {
+      alert('少なくとも1日分の実習先を選択してください');
+      return;
+    }
+    
+    // 学生の場合はAPIを呼び出してサーバーに保存
+    if (isStudentRole) {
+      try {
+        const response = await fetch('/api/auth/schedule', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            startDate: scheduleStartDate,
+            schedule: scheduleData 
+          })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+          setShowScheduleSetup(false);
+        } else {
+          alert(data.error || 'スケジュールの保存に失敗しました');
+        }
+      } catch (error) {
+        console.error('Schedule save error:', error);
+        alert('スケジュールの保存に失敗しました');
+      }
+    } else {
+      // admin/facilityの場合はローカル状態のみ更新
+      setShowScheduleSetup(false);
+    }
+  };
   
   // ログイン処理
   const handleLogin = async () => {
-    if (!loginName.trim()) return;
+    if (!loginName.trim() || !loginPassword.trim()) {
+      setLoginError('ユーザー名とパスワードを入力してください');
+      return;
+    }
     
-    const username = loginName.trim();
-    storage.setCurrentUser(username);
-    setCurrentUser(username);
-    setLoginName('');
+    setLoginLoading(true);
+    setLoginError('');
     
-    // ログインを記録
     try {
-      await fetch('/api/track-login', {
+      const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userName: username, action: 'login' })
+        body: JSON.stringify({ 
+          username: loginName.trim(), 
+          password: loginPassword.trim() 
+        })
       });
-    } catch (error) {
-      console.error('Error tracking login:', error);
-    }
-    
-    // ユーザー別の投稿データを読み込み
-    const savedPosts = storage.loadPosts();
-    console.log('Loaded posts:', savedPosts);
-    
-    // 確実に配列を設定
-    if (!Array.isArray(savedPosts)) {
-      console.error('savedPosts is not an array:', savedPosts);
-      setPosts([]);
-    } else {
-      setPosts(savedPosts);
-    }
-    
-    // サーバーからシェアされた投稿を読み込み
-    fetch('/api/get-shared-posts')
-      .then(response => response.json())
-      .then(data => {
-        if (data.success) {
-          setSharedPosts(data.posts || []);
+      
+      const data = await response.json();
+      
+      if (data.success && data.user) {
+        const username = data.user.username;
+        
+        // 教員ユーザーは教員ダッシュボードにリダイレクト
+        if (data.user.role === 'teacher') {
+          window.location.href = '/teacher-dashboard';
+          return;
         }
-      })
-      .catch(error => {
-        console.error('Error loading shared posts:', error);
-        // フォールバック: ローカルストレージから読み込み
-        const savedSharedPosts = storage.loadSharedPosts() || [];
-        setSharedPosts(savedSharedPosts);
-      });
-    
-    // いいねした投稿を読み込み
-    const savedLikedPosts = storage.getLikedPosts() || [];
-    setLikedPosts(savedLikedPosts);
-    
-    // 最後にログイン画面を非表示にする
-    setShowLogin(false);
+        
+        // 施設ユーザーは専用ページにリダイレクト
+        if (data.user.role === 'facility') {
+          window.location.href = '/facility-view';
+          return;
+        }
+        
+        storage.setCurrentUser(username);
+        setCurrentUser(username);
+        setUserRole(data.user.role);
+        setLoginName('');
+        setLoginPassword('');
+        setLoginError('');
+        
+        // ログインを記録
+        try {
+          await fetch('/api/track-login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userName: username, action: 'login' })
+          });
+        } catch (error) {
+          console.error('Error tracking login:', error);
+        }
+        
+        // ユーザーデータを読み込み
+        loadUserData(username);
+        
+        // 学生の場合、スケジュール確認
+        if (data.user.role === 'student') {
+          await checkSchedule();
+        }
+        
+        // ログイン画面を非表示
+        setShowLogin(false);
+      } else {
+        setLoginError(data.error || 'ログインに失敗しました');
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      setLoginError(`接続エラー: ${error.message || 'サーバーに接続できません'}`);
+    } finally {
+      setLoginLoading(false);
+    }
   };
   
   // ログアウト処理
   const handleLogout = async () => {
     const username = currentUser;
+    
+    // セッションをクリア
+    try {
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (error) {
+      console.error('Error logging out:', error);
+    }
     
     // ログアウトを記録
     try {
@@ -285,6 +459,83 @@ export default function MobileInputTabs() {
     } catch (error) {
       console.error('Error toggling like:', error);
       alert('いいねの更新に失敗しました');
+    }
+  };
+
+  // パスワード変更処理
+  const handlePasswordChange = async () => {
+    setPasswordChangeError('');
+    
+    if (!passwordChangeData.current || !passwordChangeData.new || !passwordChangeData.confirm) {
+      setPasswordChangeError('すべての項目を入力してください');
+      return;
+    }
+    
+    if (passwordChangeData.new !== passwordChangeData.confirm) {
+      setPasswordChangeError('新しいパスワードが一致しません');
+      return;
+    }
+    
+    if (passwordChangeData.new.length < 4) {
+      setPasswordChangeError('新しいパスワードは4文字以上で入力してください');
+      return;
+    }
+    
+    try {
+      const response = await fetch('/api/auth/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          currentPassword: passwordChangeData.current,
+          newPassword: passwordChangeData.new
+        })
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        alert('パスワードを変更しました');
+        setShowPasswordChange(false);
+        setPasswordChangeData({ current: '', new: '', confirm: '' });
+      } else {
+        setPasswordChangeError(data.error || 'パスワードの変更に失敗しました');
+      }
+    } catch (error) {
+      console.error('Password change error:', error);
+      setPasswordChangeError('パスワードの変更に失敗しました');
+    }
+  };
+
+  // 共有解除処理
+  const handleUnshare = async (postId) => {
+    if (!confirm('この投稿の共有を解除しますか？')) {
+      return;
+    }
+    
+    try {
+      const response = await fetch('/api/unshare-post', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          postId,
+          userName: currentUser
+        })
+      });
+      
+      if (response.ok) {
+        // サーバーから最新のシェア投稿を再取得
+        const getResponse = await fetch('/api/get-shared-posts');
+        if (getResponse.ok) {
+          const data = await getResponse.json();
+          setSharedPosts(data.posts || []);
+        }
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to unshare post');
+      }
+    } catch (error) {
+      console.error('Error unsharing post:', error);
+      alert('共有の解除に失敗しました');
     }
   };
 
@@ -521,17 +772,26 @@ export default function MobileInputTabs() {
   
   // REPORTタブ用：日付でフィルタリングされた投稿
   const getFilteredPostsForReport = () => {
-    // 日付の定義
-    const dateMappings = {
-      '1': '2025-07-28',
-      '2': '2025-07-29',
-      '3': '2025-07-30',
-      '4': '2025-07-31',
-      '5': '2025-08-01'
+    // scheduleStartDateから動的に5日間を計算
+    const getDateMappings = () => {
+      if (!scheduleStartDate) return {};
+      const mappings = {};
+      const start = new Date(scheduleStartDate);
+      for (let i = 0; i < 5; i++) {
+        const date = new Date(start);
+        date.setDate(start.getDate() + i);
+        mappings[String(i + 1)] = date.toISOString().split('T')[0];
+      }
+      return mappings;
     };
     
+    const dateMappings = getDateMappings();
+    
     if (reportDate === 'all') {
-      // 全期間: 1-5日目のみ（練習日を除く）
+      // 全期間: すべての投稿（スケジュール未設定の場合も含む）
+      if (!scheduleStartDate) {
+        return displayPosts;
+      }
       const definedDates = Object.values(dateMappings);
       return displayPosts.filter(post => {
         if (!post.timestamp) return false;
@@ -540,8 +800,11 @@ export default function MobileInputTabs() {
       });
     }
     
-    if (reportDate === 'practice') {
-      // 練習日: 定義された日付以外の投稿
+    if (reportDate === 'outside') {
+      // 期間外: 1-5日目以外の投稿
+      if (!scheduleStartDate) {
+        return displayPosts;
+      }
       const definedDates = Object.values(dateMappings);
       return displayPosts.filter(post => {
         if (!post.timestamp) return false;
@@ -552,13 +815,94 @@ export default function MobileInputTabs() {
     
     // 特定の日付の投稿をフィルタリング
     const targetDate = dateMappings[reportDate];
-    if (!targetDate) return [];
+    if (!targetDate) return displayPosts;
     
     return displayPosts.filter(post => {
       if (!post.timestamp) return false;
       const postDate = new Date(post.timestamp).toISOString().split('T')[0];
       return postDate === targetDate;
     });
+  };
+  
+  // 実習日の表示ラベルを取得（共通）
+  const getDateOptions = () => {
+    if (!scheduleStartDate || !isMonday(scheduleStartDate)) {
+      return [];
+    }
+    const options = [];
+    const start = new Date(scheduleStartDate);
+    for (let i = 0; i < 5; i++) {
+      const date = new Date(start);
+      date.setDate(start.getDate() + i);
+      const label = date.toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' });
+      options.push({ value: String(i + 1), label: `${i + 1}日目 (${label})` });
+    }
+    return options;
+  };
+  
+  // REPORT用（後方互換）
+  const getReportDateOptions = getDateOptions;
+  
+  // LISTタブ用：日付でフィルタリングされた投稿
+  const getFilteredPostsForList = () => {
+    // scheduleStartDateから動的に5日間を計算
+    const getDateMappings = () => {
+      if (!scheduleStartDate || !isMonday(scheduleStartDate)) return {};
+      const mappings = {};
+      const start = new Date(scheduleStartDate);
+      for (let i = 0; i < 5; i++) {
+        const date = new Date(start);
+        date.setDate(start.getDate() + i);
+        mappings[String(i + 1)] = date.toISOString().split('T')[0];
+      }
+      return mappings;
+    };
+    
+    const dateMappings = getDateMappings();
+    
+    if (listDate === 'all') {
+      if (!scheduleStartDate || !isMonday(scheduleStartDate)) {
+        return displayPosts;
+      }
+      const definedDates = Object.values(dateMappings);
+      return displayPosts.filter(post => {
+        if (!post.timestamp) return false;
+        const postDate = new Date(post.timestamp).toISOString().split('T')[0];
+        return definedDates.includes(postDate);
+      });
+    }
+    
+    if (listDate === 'outside') {
+      if (!scheduleStartDate || !isMonday(scheduleStartDate)) {
+        return displayPosts;
+      }
+      const definedDates = Object.values(dateMappings);
+      return displayPosts.filter(post => {
+        if (!post.timestamp) return false;
+        const postDate = new Date(post.timestamp).toISOString().split('T')[0];
+        return !definedDates.includes(postDate);
+      });
+    }
+    
+    const targetDate = dateMappings[listDate];
+    if (!targetDate) return displayPosts;
+    
+    return displayPosts.filter(post => {
+      if (!post.timestamp) return false;
+      const postDate = new Date(post.timestamp).toISOString().split('T')[0];
+      return postDate === targetDate;
+    });
+  };
+  
+  // LISTタブ用: フィルタリングされた投稿をカテゴリ別にグループ化
+  const getGroupedPostsForList = () => {
+    const filteredPosts = getFilteredPostsForList();
+    return filteredPosts.reduce((acc, post) => {
+      const category = post.category || '未分類';
+      if (!acc[category]) acc[category] = [];
+      acc[category].push(post);
+      return acc;
+    }, {});
   };
   
   const groupedPosts = displayPosts.reduce((acc, post) => {
@@ -593,18 +937,13 @@ export default function MobileInputTabs() {
       // タイトル
       let dateLabel;
       if (reportDate === 'all') {
-        dateLabel = '全期間 (1-5日)';
-      } else if (reportDate === 'practice') {
-        dateLabel = '練習日';
+        dateLabel = '全期間 (1-5日目)';
+      } else if (reportDate === 'outside') {
+        dateLabel = '期間外';
       } else {
-        const dateMap = {
-          '1': '1日目 (7/28)',
-          '2': '2日目 (7/29)',
-          '3': '3日目 (7/30)',
-          '4': '4日目 (7/31)',
-          '5': '5日目 (8/1)'
-        };
-        dateLabel = dateMap[reportDate] || `${reportDate}日目`;
+        const options = getReportDateOptions();
+        const opt = options.find(o => o.value === reportDate);
+        dateLabel = opt ? opt.label : `${reportDate}日目`;
       }
       // タイトルと基本情報を1つのグループにまとめる
       const headerGroup = document.createElement('div');
@@ -1177,25 +1516,27 @@ export default function MobileInputTabs() {
                             <div style={styles.postText}>
                               {post.text}
                             </div>
-                            <div style={styles.postActions}>
-                              <button
-                                style={styles.iconButton}
-                                onClick={() => {
-                                  setEditingPost(post.id);
-                                  setEditText(post.text);
-                                }}
-                                title="編集"
-                              >
-                                ✏️
-                              </button>
-                              <button
-                                style={styles.iconButton}
-                                onClick={() => setDeleteConfirmId(post.id)}
-                                title="削除"
-                              >
-                                🗑️
-                              </button>
-                            </div>
+                            {userRole !== 'teacher' && (
+                              <div style={styles.postActions}>
+                                <button
+                                  style={styles.iconButton}
+                                  onClick={() => {
+                                    setEditingPost(post.id);
+                                    setEditText(post.text);
+                                  }}
+                                  title="編集"
+                                >
+                                  ✏️
+                                </button>
+                                <button
+                                  style={styles.iconButton}
+                                  onClick={() => setDeleteConfirmId(post.id)}
+                                  title="削除"
+                                >
+                                  🗑️
+                                </button>
+                              </div>
+                            )}
                           </div>
                           <div style={styles.postFooter}>
                             <span style={styles.timestamp}>
@@ -1236,7 +1577,12 @@ export default function MobileInputTabs() {
               )}
             </main>
 
-            {/* 入力フォーム（LOG画面のみ） */}
+            {/* 入力フォーム（LOG画面のみ、教員は閲覧のみ） */}
+            {userRole === 'teacher' ? (
+              <div style={{...styles.inputContainer, backgroundColor: '#f5f5f5', textAlign: 'center', padding: '20px'}}>
+                <p style={{color: '#666', margin: 0}}>教員アカウントは閲覧専用です</p>
+              </div>
+            ) : (
             <div style={styles.inputContainer}>
               <textarea
                 style={styles.textarea}
@@ -1288,20 +1634,49 @@ export default function MobileInputTabs() {
                 {loading ? '送信中...' : '送信'}
               </button>
             </div>
+            )}
           </>
         );
 
       case 'LIST':
+        const listGroupedPosts = getGroupedPostsForList();
+        const listFilteredPosts = getFilteredPostsForList();
         return (
           <main style={styles.mainWithoutInput}>
             <h2 style={styles.sectionTitle}>分類別リスト</h2>
-            {Object.keys(groupedPosts).length === 0 ? (
+            
+            {/* 日付セレクター */}
+            <div style={styles.dateSelector}>
+              <label style={styles.dateSelectorLabel}>表示期間：</label>
+              <select
+                style={styles.dateSelectorDropdown}
+                value={listDate}
+                onChange={(e) => setListDate(e.target.value)}
+              >
+                {scheduleStartDate && isMonday(scheduleStartDate) ? (
+                  <>
+                    <option value="all">全期間 (1-5日目)</option>
+                    {getDateOptions().map(opt => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                    <option value="outside">期間外</option>
+                  </>
+                ) : (
+                  <option value="all">全期間</option>
+                )}
+              </select>
+              <span style={{ marginLeft: '10px', fontSize: '14px', color: '#666' }}>
+                ({listFilteredPosts.length}件)
+              </span>
+            </div>
+            
+            {Object.keys(listGroupedPosts).length === 0 ? (
               <div style={styles.emptyState}>
-                <p>まだ記録がありません</p>
+                <p>この期間の記録はありません</p>
               </div>
             ) : (
               <div style={styles.categoryList}>
-                {Object.entries(groupedPosts).sort((a, b) => a[0] - b[0]).map(([category, posts]) => (
+                {Object.entries(listGroupedPosts).sort((a, b) => a[0] - b[0]).map(([category, posts]) => (
                   <div key={category} style={styles.categoryGroup}>
                     <h3 style={styles.categoryTitle}>
                       {getCategoryName(category)} ({posts.length}件)
@@ -1314,13 +1689,28 @@ export default function MobileInputTabs() {
                           <div style={styles.listItemReason}>{post.reason}</div>
                           */}
                         </div>
-                        <button
-                          style={styles.shareButton}
-                          onClick={() => setShareConfirmPost(post)}
-                          title="みんなの学びとしてシェア"
-                        >
-                          🔗
-                        </button>
+                        {sharedPosts.some(sp => sp.id === post.id) ? (
+                          <button
+                            style={{
+                              ...styles.shareButton,
+                              backgroundColor: '#C8E6C9',
+                              color: '#2E7D32',
+                              cursor: 'pointer'
+                            }}
+                            onClick={() => handleUnshare(post.id)}
+                            title="クリックで共有を解除"
+                          >
+                            ✓ 共有中
+                          </button>
+                        ) : (
+                          <button
+                            style={styles.shareButton}
+                            onClick={() => setShareConfirmPost(post)}
+                            title="みんなの学びとしてシェア"
+                          >
+                            🔗
+                          </button>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -1339,6 +1729,38 @@ export default function MobileInputTabs() {
         
         return (
           <main style={styles.mainWithoutInput}>
+            {/* 日程設定（未設定の場合） */}
+            {!scheduleStartDate && (
+              <div style={{
+                backgroundColor: '#fff3e0',
+                padding: '15px',
+                borderRadius: '8px',
+                marginBottom: '15px',
+                border: '1px solid #ffcc80'
+              }}>
+                <p style={{ margin: '0 0 10px 0', fontSize: '14px', color: '#e65100' }}>
+                  📅 実習開始日を設定すると、日別レポートが利用できます
+                </p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                  <label style={{ fontSize: '14px' }}>実習開始日（月曜日）：</label>
+                  <input
+                    type="date"
+                    value={scheduleStartDate}
+                    onChange={(e) => setScheduleStartDate(e.target.value)}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: '4px',
+                      border: '1px solid #ddd',
+                      fontSize: '14px'
+                    }}
+                  />
+                  {scheduleStartDate && !isMonday(scheduleStartDate) && (
+                    <span style={{ color: '#f44336', fontSize: '12px' }}>※月曜日を選択してください</span>
+                  )}
+                </div>
+              </div>
+            )}
+            
             {/* 日付セレクター */}
             <div style={styles.dateSelector}>
               <label style={styles.dateSelectorLabel}>レポート期間：</label>
@@ -1347,14 +1769,34 @@ export default function MobileInputTabs() {
                 value={reportDate}
                 onChange={(e) => setReportDate(e.target.value)}
               >
-                <option value="practice">練習日</option>
-                <option value="1">1日目 (7/28)</option>
-                <option value="2">2日目 (7/29)</option>
-                <option value="3">3日目 (7/30)</option>
-                <option value="4">4日目 (7/31)</option>
-                <option value="5">5日目 (8/1)</option>
-                <option value="all">全期間 (1-5日)</option>
+                {scheduleStartDate && isMonday(scheduleStartDate) ? (
+                  <>
+                    <option value="all">全期間 (1-5日目)</option>
+                    {getReportDateOptions().map(opt => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                    <option value="outside">期間外</option>
+                  </>
+                ) : (
+                  <option value="all">全期間</option>
+                )}
               </select>
+              {scheduleStartDate && isMonday(scheduleStartDate) && (
+                <button
+                  onClick={() => setScheduleStartDate('')}
+                  style={{
+                    marginLeft: '10px',
+                    padding: '5px 10px',
+                    fontSize: '12px',
+                    backgroundColor: '#f5f5f5',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  日程変更
+                </button>
+              )}
             </div>
             
             <div style={styles.statsContainer}>
@@ -1457,6 +1899,24 @@ export default function MobileInputTabs() {
                           <span style={styles.sharedDate}>
                             {post.date || post.timestamp}
                           </span>
+                          {(isMyPost || currentUser === 'admin') && (
+                            <button
+                              onClick={() => handleUnshare(post.id)}
+                              style={{
+                                marginLeft: '8px',
+                                padding: '2px 8px',
+                                fontSize: '12px',
+                                backgroundColor: 'transparent',
+                                color: '#999',
+                                border: '1px solid #ddd',
+                                borderRadius: '4px',
+                                cursor: 'pointer'
+                              }}
+                              title="共有を解除"
+                            >
+                              ×
+                            </button>
+                          )}
                         </div>
                       </div>
                       <div style={styles.sharedPostText}>{post.text}</div>
@@ -1490,30 +1950,46 @@ export default function MobileInputTabs() {
           <p style={styles.loginSubtitle}>医学部実習記録システム</p>
           
           <div style={styles.loginForm}>
-            <label style={styles.loginLabel}>お名前を入力してください</label>
+            <label style={styles.loginLabel}>ユーザー名</label>
             <input
               type="text"
               value={loginName}
               onChange={(e) => setLoginName(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
-              placeholder="例: 山田太郎"
+              placeholder="ユーザー名を入力"
               style={styles.loginInput}
               autoFocus
+              disabled={loginLoading}
             />
+            
+            <label style={{...styles.loginLabel, marginTop: '16px'}}>パスワード</label>
+            <input
+              type="password"
+              value={loginPassword}
+              onChange={(e) => setLoginPassword(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
+              placeholder="パスワードを入力"
+              style={styles.loginInput}
+              disabled={loginLoading}
+            />
+            
+            {loginError && (
+              <p style={styles.loginError}>{loginError}</p>
+            )}
+            
             <button
               onClick={handleLogin}
-              disabled={!loginName.trim()}
+              disabled={!loginName.trim() || !loginPassword.trim() || loginLoading}
               style={{
                 ...styles.loginButton,
-                opacity: !loginName.trim() ? 0.5 : 1
+                opacity: (!loginName.trim() || !loginPassword.trim() || loginLoading) ? 0.5 : 1
               }}
             >
-              アプリケーションを開始
+              {loginLoading ? 'ログイン中...' : 'ログイン'}
             </button>
           </div>
           
           <p style={styles.loginNote}>
-            ※名前は他の学生と重複しないようにしてください
+            ※アカウントは管理者から発行されます
           </p>
         </div>
       </div>
@@ -1529,6 +2005,157 @@ export default function MobileInputTabs() {
   if (!currentUser && !showLogin) {
     return null;
   }
+  
+  // 施設一覧（スケジュール設定用）
+  const FACILITIES = {
+    Rishiri: { id: 'Rishiri', name: '利尻島国保中央病院' },
+    Rebun: { id: 'Rebun', name: '礼文町国民健康保険 船泊診療所' },
+    Nayoro: { id: 'Nayoro', name: '名寄市立病院' }
+  };
+  
+  // スケジュール設定画面
+  if (showScheduleSetup) {
+    const weekDates = getWeekDates(scheduleStartDate);
+    
+    return (
+      <div style={styles.loginContainer}>
+        <div style={{ ...styles.loginBox, maxWidth: '500px' }}>
+          <h2 style={styles.loginTitle}>実習スケジュール設定</h2>
+          <p style={{ marginBottom: '20px', color: '#666', fontSize: '14px' }}>
+            実習開始日（月曜日）を入力すると、5日間の日程が自動設定されます
+          </p>
+          
+          {/* 実習開始日入力 */}
+          <div style={{ marginBottom: '20px' }}>
+            <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold', fontSize: '16px' }}>
+              📅 実習開始日（月曜日）
+            </label>
+            <input
+              type="date"
+              value={scheduleStartDate}
+              onChange={(e) => {
+                const value = e.target.value;
+                setScheduleStartDate(value);
+                // 開始日変更時にスケジュールをリセット
+                if (value && !isMonday(value)) {
+                  // 月曜日でない場合は警告表示（UIで）
+                }
+              }}
+              style={{
+                width: '100%',
+                padding: '12px',
+                fontSize: '16px',
+                border: scheduleStartDate && !isMonday(scheduleStartDate) ? '2px solid #f44336' : '1px solid #ddd',
+                borderRadius: '8px',
+                backgroundColor: 'white'
+              }}
+            />
+            {scheduleStartDate && !isMonday(scheduleStartDate) && (
+              <p style={{ color: '#f44336', fontSize: '14px', marginTop: '5px' }}>
+                ⚠ 月曜日を選択してください
+              </p>
+            )}
+          </div>
+          
+          {/* 日付ごとの施設選択 */}
+          {scheduleStartDate && isMonday(scheduleStartDate) && (
+            <div style={{ 
+              backgroundColor: '#f5f5f5', 
+              padding: '15px', 
+              borderRadius: '8px',
+              marginBottom: '15px'
+            }}>
+              <p style={{ marginBottom: '15px', fontWeight: 'bold' }}>
+                実習期間: {weekDates[0]?.dateStr} 〜 {weekDates[4]?.dateStr}
+              </p>
+              
+              {weekDates.map(({ dayNum, dateStr }) => (
+                <div key={dayNum} style={{ marginBottom: '12px' }}>
+                  <label style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    marginBottom: '5px',
+                    fontSize: '14px'
+                  }}>
+                    <span style={{ 
+                      fontWeight: 'bold', 
+                      width: '60px',
+                      color: dayNum === 5 ? '#1976d2' : '#333'
+                    }}>
+                      {dayNum}日目
+                    </span>
+                    <span style={{ color: '#666' }}>{dateStr}</span>
+                  </label>
+                  <select
+                    value={scheduleData[`day${dayNum}`]}
+                    onChange={(e) => setScheduleData(prev => ({
+                      ...prev,
+                      [`day${dayNum}`]: e.target.value
+                    }))}
+                    style={{
+                      width: '100%',
+                      padding: '10px',
+                      fontSize: '15px',
+                      border: '1px solid #ddd',
+                      borderRadius: '6px',
+                      backgroundColor: 'white'
+                    }}
+                  >
+                    <option value="">-- 選択してください --</option>
+                    {Object.values(FACILITIES).map(facility => (
+                      <option key={facility.id} value={facility.id}>
+                        {facility.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ))}
+            </div>
+          )}
+          
+          <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+            <button
+              onClick={handleSaveSchedule}
+              disabled={!scheduleStartDate || !isMonday(scheduleStartDate)}
+              style={{
+                flex: 1,
+                padding: '14px',
+                backgroundColor: scheduleStartDate && isMonday(scheduleStartDate) ? '#4CAF50' : '#ccc',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                fontSize: '16px',
+                fontWeight: 'bold',
+                cursor: scheduleStartDate && isMonday(scheduleStartDate) ? 'pointer' : 'not-allowed'
+              }}
+            >
+              保存
+            </button>
+            <button
+              onClick={() => setShowScheduleSetup(false)}
+              style={{
+                padding: '14px 20px',
+                backgroundColor: '#f5f5f5',
+                color: '#333',
+                border: '1px solid #ddd',
+                borderRadius: '8px',
+                fontSize: '16px',
+                cursor: 'pointer'
+              }}
+            >
+              キャンセル
+            </button>
+          </div>
+          
+          {userRole !== 'student' && (
+            <p style={{ marginTop: '15px', fontSize: '12px', color: '#999', textAlign: 'center' }}>
+              ※管理者向け：日付設定のみでレポート機能が利用できます（施設選択は任意）
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={styles.container}>
@@ -1540,7 +2167,113 @@ export default function MobileInputTabs() {
             <div style={styles.subtitle}>医学部実習記録システム</div>
           </div>
           <div style={styles.userInfo}>
-            <span style={styles.username}>👤 {currentUser}</span>
+            <div style={{ position: 'relative' }}>
+              <span 
+                style={{ ...styles.username, cursor: 'pointer', textDecoration: 'underline' }}
+                onClick={() => setShowUserInfoDropdown(!showUserInfoDropdown)}
+              >
+                👤 {currentUser}
+              </span>
+              
+              {/* ユーザー情報ドロップダウン */}
+              {showUserInfoDropdown && (
+                <div style={{
+                  position: 'absolute',
+                  top: '100%',
+                  right: 0,
+                  marginTop: '8px',
+                  backgroundColor: 'white',
+                  borderRadius: '8px',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                  padding: '15px',
+                  minWidth: '280px',
+                  zIndex: 1000,
+                  border: '1px solid #e0e0e0'
+                }}>
+                  <div style={{ marginBottom: '12px', paddingBottom: '12px', borderBottom: '1px solid #eee' }}>
+                    <div style={{ fontSize: '14px', color: '#666', marginBottom: '4px' }}>ユーザー名</div>
+                    <div style={{ fontSize: '16px', fontWeight: 'bold' }}>{currentUser}</div>
+                  </div>
+                  
+                  <div style={{ marginBottom: '12px', paddingBottom: '12px', borderBottom: '1px solid #eee' }}>
+                    <div style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>実習スケジュール</div>
+                    {scheduleStartDate && isMonday(scheduleStartDate) ? (
+                      <div>
+                        <div style={{ fontSize: '14px', marginBottom: '8px' }}>
+                          <strong>開始日:</strong> {new Date(scheduleStartDate).toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' })}
+                        </div>
+                        <div style={{ fontSize: '13px' }}>
+                          {getDateOptions().map((opt, idx) => (
+                            <div key={opt.value} style={{ padding: '3px 0', color: '#333' }}>
+                              {opt.label} {scheduleData[`day${idx + 1}`] && `- ${scheduleData[`day${idx + 1}`]}`}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: '14px', color: '#999' }}>未設定</div>
+                    )}
+                  </div>
+                  
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button
+                        onClick={() => {
+                          setShowUserInfoDropdown(false);
+                          setShowScheduleSetup(true);
+                        }}
+                        style={{
+                          flex: 1,
+                          padding: '8px 12px',
+                          fontSize: '13px',
+                          backgroundColor: '#4CAF50',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '4px',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        {scheduleStartDate ? 'スケジュール編集' : 'スケジュール設定'}
+                      </button>
+                      <button
+                        onClick={() => setShowUserInfoDropdown(false)}
+                        style={{
+                          padding: '8px 12px',
+                          fontSize: '13px',
+                          backgroundColor: '#f5f5f5',
+                          color: '#333',
+                          border: '1px solid #ddd',
+                          borderRadius: '4px',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        閉じる
+                      </button>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setShowUserInfoDropdown(false);
+                        setShowPasswordChange(true);
+                        setPasswordChangeData({ current: '', new: '', confirm: '' });
+                        setPasswordChangeError('');
+                      }}
+                      style={{
+                        width: '100%',
+                        padding: '8px 12px',
+                        fontSize: '13px',
+                        backgroundColor: '#fff',
+                        color: '#666',
+                        border: '1px solid #ddd',
+                        borderRadius: '4px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      🔒 パスワード変更
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
             <button 
               style={styles.logoutButton} 
               onClick={handleLogout}
@@ -1577,7 +2310,8 @@ export default function MobileInputTabs() {
       {/* タブコンテンツ */}
       {renderTabContent()}
       
-      {/* 同期ボタン（LOGタブのみ） */}
+      {/* オフライン同期ボタン - 機能未実装のため非表示（次バージョンで対応予定） */}
+      {/* 
       {activeTab === 'LOG' && (
         <div style={styles.syncButtonContainer}>
           <button
@@ -1594,6 +2328,7 @@ export default function MobileInputTabs() {
           )}
         </div>
       )}
+      */}
 
       {/* Safari対策の白いスペーサー（LOG画面のみ） */}
       {activeTab === 'LOG' && <div style={styles.safariSpacer} />}
@@ -1619,6 +2354,90 @@ export default function MobileInputTabs() {
               <button
                 style={styles.cancelButton}
                 onClick={() => setShareConfirmPost(null)}
+              >
+                キャンセル
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* パスワード変更モーダル */}
+      {showPasswordChange && (
+        <div style={styles.confirmOverlay}>
+          <div style={{ ...styles.confirmDialog, maxWidth: '350px' }}>
+            <h3 style={styles.confirmTitle}>🔒 パスワード変更</h3>
+            <div style={{ padding: '10px 0' }}>
+              <div style={{ marginBottom: '15px' }}>
+                <label style={{ display: 'block', fontSize: '14px', marginBottom: '5px', color: '#666' }}>
+                  現在のパスワード
+                </label>
+                <input
+                  type="password"
+                  value={passwordChangeData.current}
+                  onChange={(e) => setPasswordChangeData({ ...passwordChangeData, current: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    fontSize: '16px',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+              <div style={{ marginBottom: '15px' }}>
+                <label style={{ display: 'block', fontSize: '14px', marginBottom: '5px', color: '#666' }}>
+                  新しいパスワード
+                </label>
+                <input
+                  type="password"
+                  value={passwordChangeData.new}
+                  onChange={(e) => setPasswordChangeData({ ...passwordChangeData, new: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    fontSize: '16px',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+              <div style={{ marginBottom: '15px' }}>
+                <label style={{ display: 'block', fontSize: '14px', marginBottom: '5px', color: '#666' }}>
+                  新しいパスワード（確認）
+                </label>
+                <input
+                  type="password"
+                  value={passwordChangeData.confirm}
+                  onChange={(e) => setPasswordChangeData({ ...passwordChangeData, confirm: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    fontSize: '16px',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+              {passwordChangeError && (
+                <p style={{ color: '#f44336', fontSize: '14px', margin: '10px 0' }}>
+                  {passwordChangeError}
+                </p>
+              )}
+            </div>
+            <div style={styles.confirmButtons}>
+              <button
+                style={styles.confirmButton}
+                onClick={handlePasswordChange}
+              >
+                変更する
+              </button>
+              <button
+                style={styles.cancelButton}
+                onClick={() => setShowPasswordChange(false)}
               >
                 キャンセル
               </button>
@@ -2203,6 +3022,13 @@ const styles = {
     fontSize: '14px',
     color: '#999',
     marginTop: '20px'
+  },
+  
+  loginError: {
+    color: '#f44336',
+    fontSize: '14px',
+    margin: '8px 0',
+    textAlign: 'center'
   },
   
   // ユーザー情報表示
