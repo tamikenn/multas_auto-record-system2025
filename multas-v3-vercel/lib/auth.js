@@ -188,7 +188,8 @@ function getAllUsers() {
     facilities: u.facilities || [],
     scheduleStartDate: u.scheduleStartDate || null,
     schedule: u.schedule || null,
-    createdAt: u.createdAt
+    createdAt: u.createdAt,
+    isTest: u.isTest || false
   }));
 }
 
@@ -217,6 +218,22 @@ function deleteUser(userId) {
     return { success: true, deletedUser: user.username };
   }
   return { success: false, error: '削除に失敗しました' };
+}
+
+/**
+ * テストユーザーフラグの切り替え（管理者用）
+ */
+function toggleTestFlag(userId) {
+  const data = loadUsers();
+  const user = data.users.find(u => u.id === userId);
+  if (!user) {
+    return { success: false, error: 'ユーザーが見つかりません' };
+  }
+  user.isTest = !user.isTest;
+  if (saveUsers(data)) {
+    return { success: true, isTest: user.isTest, username: user.username };
+  }
+  return { success: false, error: '更新に失敗しました' };
 }
 
 /**
@@ -379,6 +396,7 @@ module.exports = {
   deleteUser,
   changePassword,
   resetPassword,
+  toggleTestFlag,
   ensureAdminExists,
   getUserByUsername,
   getStudentsByFacilities,

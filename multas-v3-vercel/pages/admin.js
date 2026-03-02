@@ -47,11 +47,31 @@ export default function AdminPage() {
 
   const loadUsers = async () => {
     try {
-      const response = await fetch('/api/auth/users');
-      const data = await response.json();
-      
-      if (data.success) {
-        setUsers(data.users);
+      const [usersRes, loginRes, postsRes] = await Promise.all([
+        fetch('/api/auth/users'),
+        fetch('/api/get-login-status'),
+        fetch('/api/get-all-posts'),
+      ]);
+      const usersData = await usersRes.json();
+      const loginData = await loginRes.json();
+      const postsData = await postsRes.json();
+
+      if (usersData.success) {
+        const loginMap = (loginData.success && loginData.lastLoginByUser) ? loginData.lastLoginByUser : {};
+        const statsMap = {};
+        if (postsData.success && postsData.studentStats) {
+          postsData.studentStats.forEach(stat => {
+            statsMap[stat.userName] = stat;
+          });
+        }
+
+        const enrichedUsers = usersData.users.map(user => ({
+          ...user,
+          lastLoginDate: loginMap[user.username] || null,
+          lastPostDate: statsMap[user.username]?.lastPostDate || null,
+          postCount: statsMap[user.username]?.postCount || 0,
+        }));
+        setUsers(enrichedUsers);
       }
     } catch (error) {
       console.error('Error loading users:', error);
@@ -122,6 +142,25 @@ export default function AdminPage() {
         await loadUsers();
       } else {
         setError(data.error || '削除に失敗しました');
+      }
+    } catch (error) {
+      setError('サーバーに接続できません');
+    }
+  };
+
+  const handleToggleTest = async (userId, username) => {
+    try {
+      const response = await fetch('/api/auth/users', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, action: 'toggleTest' })
+      });
+      const data = await response.json();
+      if (data.success) {
+        setMessage(`「${username}」を${data.isTest ? 'テストユーザーに設定' : 'テスト解除'}しました`);
+        await loadUsers();
+      } else {
+        setError(data.error || '変更に失敗しました');
       }
     } catch (error) {
       setError('サーバーに接続できません');
@@ -273,14 +312,19 @@ export default function AdminPage() {
               <th style={styles.th}>ユーザー名</th>
               <th style={styles.th}>権限</th>
               <th style={styles.th}>施設/スケジュール</th>
-              <th style={styles.th}>登録日</th>
+              <th style={styles.th}>最終ログイン</th>
+              <th style={styles.th}>最終投稿</th>
+              <th style={styles.th}>投稿数</th>
               <th style={styles.th}>操作</th>
             </tr>
           </thead>
           <tbody>
             {users.map(user => (
               <tr key={user.id}>
-                <td style={styles.td}>{user.username}</td>
+                <td style={styles.td}>
+                  {user.username}
+                  {user.isTest && <span style={styles.testBadge}>テスト</span>}
+                </td>
                 <td style={styles.td}>
                   <span style={
                     user.role === 'admin' ? styles.adminBadge : 
@@ -317,7 +361,17 @@ export default function AdminPage() {
                   ) : '-'}
                 </td>
                 <td style={styles.td}>
-                  {new Date(user.createdAt).toLocaleDateString('ja-JP')}
+                  <span style={styles.dateText}>
+                    {user.lastLoginDate ? new Date(user.lastLoginDate).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}
+                  </span>
+                </td>
+                <td style={styles.td}>
+                  <span style={styles.dateText}>
+                    {user.lastPostDate ? new Date(user.lastPostDate).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}
+                  </span>
+                </td>
+                <td style={styles.td}>
+                  {user.postCount > 0 ? user.postCount : '-'}
                 </td>
                 <td style={styles.td}>
                   {editingUser === user.id ? (
@@ -348,8 +402,16 @@ export default function AdminPage() {
                         onClick={() => setEditingUser(user.id)}
                         style={styles.editButton}
                       >
-                        パスワード変更
+                        PW変更
                       </button>
+                      {user.role === 'student' && (
+                        <button
+                          onClick={() => handleToggleTest(user.id, user.username)}
+                          style={user.isTest ? styles.testOnButton : styles.testOffButton}
+                        >
+                          {user.isTest ? 'テスト解除' : 'テスト指定'}
+                        </button>
+                      )}
                       <button 
                         onClick={() => handleDeleteUser(user.id, user.username)}
                         style={styles.deleteButton}
@@ -579,5 +641,37 @@ const styles = {
   warning: {
     color: '#f44336',
     marginTop: '10px'
+  },
+  dateText: {
+    fontSize: '12px',
+    color: '#666',
+    whiteSpace: 'nowrap',
+  },
+  testBadge: {
+    backgroundColor: '#FF9800',
+    color: 'white',
+    padding: '2px 6px',
+    borderRadius: '4px',
+    fontSize: '10px',
+    marginLeft: '6px',
+    verticalAlign: 'middle',
+  },
+  testOnButton: {
+    padding: '6px 12px',
+    backgroundColor: '#FF9800',
+    color: 'white',
+    border: 'none',
+    borderRadius: '4px',
+    fontSize: '12px',
+    cursor: 'pointer',
+  },
+  testOffButton: {
+    padding: '6px 12px',
+    backgroundColor: '#9E9E9E',
+    color: 'white',
+    border: 'none',
+    borderRadius: '4px',
+    fontSize: '12px',
+    cursor: 'pointer',
   }
 };

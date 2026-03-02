@@ -17,6 +17,7 @@ export default function TeacherDashboard() {
   const [mainTab, setMainTab] = useState('students');
   const [sharedPosts, setSharedPosts] = useState([]);
   const [likedPosts, setLikedPosts] = useState([]);
+  const [loginStatusMap, setLoginStatusMap] = useState({});
 
   useEffect(() => {
     checkSession();
@@ -28,7 +29,7 @@ export default function TeacherDashboard() {
       const data = await response.json();
       
       if (!data.authenticated) {
-        router.replace('/login');
+        router.replace('/mobile-input-tabs');
         return;
       }
       
@@ -38,22 +39,42 @@ export default function TeacherDashboard() {
       }
       
       setUser(data.user);
-      await Promise.all([loadStudents(), loadSharedPosts()]);
+      await Promise.all([loadStudents(), loadSharedPosts(data.user.username), loadLoginStatus()]);
     } catch (error) {
       console.error('Session check failed:', error);
-      router.replace('/login');
+      router.replace('/mobile-input-tabs');
     } finally {
       setLoading(false);
     }
   };
 
+  const loadLoginStatus = async () => {
+    try {
+      const response = await fetch('/api/get-login-status');
+      const data = await response.json();
+      if (data.success && data.lastLoginByUser) {
+        setLoginStatusMap(data.lastLoginByUser);
+        return data.lastLoginByUser;
+      }
+    } catch (error) {
+      console.error('Failed to load login status:', error);
+    }
+    return {};
+  };
+
   const loadStudents = async () => {
     try {
-      const studentsRes = await fetch('/api/get-students');
+      const [studentsRes, postsRes, loginRes] = await Promise.all([
+        fetch('/api/get-students'),
+        fetch('/api/get-all-posts'),
+        fetch('/api/get-login-status'),
+      ]);
       const studentsData = await studentsRes.json();
-      
-      const postsRes = await fetch('/api/get-all-posts');
       const postsData = await postsRes.json();
+      const loginData = await loginRes.json();
+
+      const loginMap = (loginData.success && loginData.lastLoginByUser) ? loginData.lastLoginByUser : {};
+      setLoginStatusMap(loginMap);
       
       if (studentsData.success) {
         const statsMap = new Map();
@@ -63,7 +84,6 @@ export default function TeacherDashboard() {
           });
         }
         
-        // API側で施設順にソート済み
         const enrichedStudents = studentsData.students.map(student => {
           const stats = statsMap.get(student.username) || {
             postCount: 0,
@@ -76,9 +96,10 @@ export default function TeacherDashboard() {
             postCount: stats.postCount || 0,
             lastPostDate: stats.lastPostDate || null,
             firstPostDate: stats.firstPostDate || null,
+            lastLoginDate: loginMap[student.username] || null,
             scheduleStartDate: student.scheduleStartDate,
             primaryFacility: student.primaryFacility,
-            status: getActivityStatus(stats.lastPostDate),
+            status: getActivityStatus(stats.lastPostDate, loginMap[student.username]),
           };
         });
         
@@ -89,13 +110,19 @@ export default function TeacherDashboard() {
     }
   };
 
-  const loadSharedPosts = async () => {
+  const loadSharedPosts = async (username) => {
     try {
       const response = await fetch('/api/get-shared-posts');
       const data = await response.json();
       
       if (data.success) {
         setSharedPosts(data.posts || []);
+        if (username) {
+          const alreadyLiked = (data.posts || [])
+            .filter(post => post.likes && post.likes[username] === true)
+            .map(post => post.id);
+          setLikedPosts(alreadyLiked);
+        }
       }
     } catch (error) {
       console.error('Failed to load shared posts:', error);
@@ -105,17 +132,20 @@ export default function TeacherDashboard() {
   const handleLike = async (postId) => {
     if (!user) return;
     
+    const isLiked = likedPosts.includes(postId);
+    const action = isLiked ? 'unlike' : 'like';
+    
     try {
       const response = await fetch('/api/toggle-like', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ postId, userName: user.username })
+        body: JSON.stringify({ postId, userId: user.username, action })
       });
       
       const data = await response.json();
       
       if (data.success) {
-        if (likedPosts.includes(postId)) {
+        if (isLiked) {
           setLikedPosts(likedPosts.filter(id => id !== postId));
         } else {
           setLikedPosts([...likedPosts, postId]);
@@ -123,10 +153,9 @@ export default function TeacherDashboard() {
         
         setSharedPosts(sharedPosts.map(post => {
           if (post.id === postId) {
-            const currentLikes = post.likes || 0;
             return {
               ...post,
-              likes: likedPosts.includes(postId) ? currentLikes - 1 : currentLikes + 1
+              likeCount: data.likeCount
             };
           }
           return post;
@@ -137,14 +166,13 @@ export default function TeacherDashboard() {
     }
   };
 
-  const getActivityStatus = (lastPostDate) => {
-    if (!lastPostDate) return { color: '#9CA3AF', label: '未投稿', level: 0 };
-    
-    const now = new Date();
-    const lastDate = new Date(lastPostDate);
-    const diffMs = now - lastDate;
-    const diffHours = diffMs / (1000 * 60 * 60);
-    
+  const getActivityStatus = (lastPostDate, lastLoginDate) => {
+    const candidates = [lastPostDate, lastLoginDate].filter(Boolean).map(d => new Date(d));
+    if (candidates.length === 0) return { color: '#9CA3AF', label: 'アクションなし', level: 0 };
+
+    const lastAction = new Date(Math.max(...candidates));
+    const diffHours = (new Date() - lastAction) / (1000 * 60 * 60);
+
     if (diffHours <= 1) return { color: '#3B82F6', label: '1時間以内', level: 4 };
     if (diffHours <= 3) return { color: '#10B981', label: '3時間以内', level: 3 };
     if (diffHours <= 6) return { color: '#F59E0B', label: '6時間以内', level: 2 };
@@ -327,15 +355,19 @@ export default function TeacherDashboard() {
                             </span>
                           )}
                           <div style={styles.likeSection}>
-                            <button
-                              onClick={() => handleLike(post.id)}
-                              style={{
-                                ...styles.likeButton,
-                                ...(likedPosts.includes(post.id) ? styles.likedButton : {})
-                              }}
-                            >
-                              {likedPosts.includes(post.id) ? '❤️' : '🤍'} {post.likes || 0}
-                            </button>
+                            {post.sharedBy === user?.username || post.userName === user?.username ? (
+                              <span style={styles.likeCount}>❤️ {post.likeCount || 0}</span>
+                            ) : (
+                              <button
+                                onClick={() => handleLike(post.id)}
+                                style={{
+                                  ...styles.likeButton,
+                                  ...(likedPosts.includes(post.id) ? styles.likedButton : {})
+                                }}
+                              >
+                                {likedPosts.includes(post.id) ? '❤️' : '🤍'} {post.likeCount || 0}
+                              </button>
+                            )}
                           </div>
                         </div>
                       ))}
@@ -347,10 +379,11 @@ export default function TeacherDashboard() {
                   <h2 style={styles.sectionTitle}>学生一覧 ({students.length}名)</h2>
                   
                   <div style={styles.statusLegend}>
-                    <span style={{...styles.legendItem, color: '#3B82F6'}}>● 1時間以内</span>
-                    <span style={{...styles.legendItem, color: '#10B981'}}>● 3時間以内</span>
-                    <span style={{...styles.legendItem, color: '#F59E0B'}}>● 6時間以内</span>
-                    <span style={{...styles.legendItem, color: '#9CA3AF'}}>● 1日以上/未投稿</span>
+                    <span style={{...styles.legendItem, color: '#3B82F6'}}>● 1h以内</span>
+                    <span style={{...styles.legendItem, color: '#10B981'}}>● 3h以内</span>
+                    <span style={{...styles.legendItem, color: '#F59E0B'}}>● 6h以内</span>
+                    <span style={{...styles.legendItem, color: '#F97316'}}>● 24h以内</span>
+                    <span style={{...styles.legendItem, color: '#9CA3AF'}}>● 1日以上</span>
                   </div>
 
                   {students.length === 0 ? (
@@ -377,8 +410,13 @@ export default function TeacherDashboard() {
                       </div>
                       <div style={styles.studentInfo}>
                         <span style={styles.postCount}>投稿: {student.postCount}件</span>
-                        <span style={styles.lastPost}>
-                          最終: {formatDate(student.lastPostDate)}
+                      </div>
+                      <div style={styles.studentTimestamps}>
+                        <span style={styles.timestampItem}>
+                          最終ログイン: {formatDate(student.lastLoginDate)}
+                        </span>
+                        <span style={styles.timestampItem}>
+                          最終投稿: {formatDate(student.lastPostDate)}
                         </span>
                       </div>
                         </div>
@@ -651,6 +689,13 @@ const styles = {
   likedButton: {
     backgroundColor: '#FEE2E2',
   },
+  likeCount: {
+    fontSize: '14px',
+    color: '#6B7280',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+  },
   studentList: {},
   sectionTitle: {
     fontSize: '16px',
@@ -715,6 +760,16 @@ const styles = {
   },
   postCount: {},
   lastPost: {},
+  studentTimestamps: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2px',
+    marginTop: '4px',
+  },
+  timestampItem: {
+    fontSize: '12px',
+    color: '#9CA3AF',
+  },
   noData: {
     textAlign: 'center',
     color: '#9CA3AF',

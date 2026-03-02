@@ -4,7 +4,7 @@
  * DELETE /api/auth/users - ユーザー削除
  */
 
-import { getAllUsers, deleteUser, validateSession, resetPassword } from '../../../lib/auth';
+import { getAllUsers, deleteUser, validateSession, resetPassword, toggleTestFlag } from '../../../lib/auth';
 
 export default async function handler(req, res) {
   // 管理者認証チェック
@@ -60,6 +60,20 @@ export default async function handler(req, res) {
       return res.status(200).json({ success: true, message: 'パスワードを変更しました' });
     }
     return res.status(400).json(result);
+  }
+
+  if (req.method === 'PATCH') {
+    const { userId, action } = req.body;
+
+    if (action === 'toggleTest' && userId) {
+      const result = toggleTestFlag(userId);
+      if (result.success) {
+        return res.status(200).json(result);
+      }
+      return res.status(400).json(result);
+    }
+
+    return res.status(400).json({ success: false, error: '不正なリクエストです' });
   }
 
   return res.status(405).json({ success: false, error: 'Method not allowed' });

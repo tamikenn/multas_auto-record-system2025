@@ -108,9 +108,10 @@ export default async function handler(req, res) {
     const storage = getStorageSync();
     const timestamp = getJapanTimestamp();
 
-    // 投稿データを準備
+    const postId = id || generateId('post');
+
     const post = {
-      id: id || generateId('post'),
+      id: postId,
       timestamp,
       userName,
       text,
@@ -121,8 +122,20 @@ export default async function handler(req, res) {
 
     logger.info(`投稿保存: ${userName} - "${text.substring(0, 30)}..."`);
 
-    // HybridStorageを使用して保存
-    const result = await storage.addPost(post);
+    let result;
+    if (id) {
+      const existingPosts = await storage.loadAllPosts();
+      const exists = existingPosts.some(p => String(p.id) === String(id));
+      if (exists) {
+        await storage.updatePost(id, { text, category, reason, date: timestamp });
+        result = { rowNumber: -1, synced: false };
+        logger.info(`既存投稿を更新: ${id}`);
+      } else {
+        result = await storage.addPost(post);
+      }
+    } else {
+      result = await storage.addPost(post);
+    }
 
     logger.debug('保存結果', result);
 

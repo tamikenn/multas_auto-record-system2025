@@ -5,6 +5,7 @@
 
 import { getStorageSync, getStorageInfo } from '../../lib/server-storage.js';
 import { createLogger } from '../../lib/logger.js';
+import { getAllUsers } from '../../lib/auth';
 
 const logger = createLogger('API:get-all-posts');
 
@@ -101,8 +102,12 @@ export default async function handler(req, res) {
     // ソート
     posts = sortPostsByDate(posts);
 
-    // 統計情報を計算
-    const studentStats = calculateStudentStats(posts);
+    // テストユーザーを統計から除外
+    const testUserNames = new Set(
+      getAllUsers().filter(u => u.isTest).map(u => u.username)
+    );
+    const postsForStats = userName ? posts : posts.filter(p => !testUserNames.has(p.userName));
+    const studentStats = calculateStudentStats(postsForStats);
 
     // ページネーション（オプション）
     const totalPosts = posts.length;

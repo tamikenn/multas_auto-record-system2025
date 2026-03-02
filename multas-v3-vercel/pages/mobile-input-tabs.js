@@ -141,30 +141,54 @@ export default function MobileInputTabs() {
 
   // ユーザーデータを読み込む関数（ローカルストレージの未同期データを自動サルベージ）
   const loadUserData = async (username) => {
-    if (username) {
-      // まずローカルストレージから投稿を取得（サルベージ用）
-      const localPosts = storage.loadPosts() || [];
-      
-      // サーバー（Excel）からユーザーの投稿を取得
-      let serverPosts = [];
-      try {
-        const response = await fetch(`/api/get-all-posts?userName=${encodeURIComponent(username)}`);
-        const data = await response.json();
-        
-        if (data.success && data.posts) {
-          serverPosts = data.posts;
+    if (!username) return;
+
+    // Step 0: サルベージ前にローカルデータのバックアップを作成（絶対に消さない）
+    storage.createSalvageBackup(username);
+
+    // Step 1: ローカルストレージから投稿を取得（ユーザー別 + グローバル + 全キー横断）
+    const localPostsByUser = storage.loadPosts(username) || [];
+    const localPostsGlobal = storage.loadPosts() || [];
+    const allLocalPosts = storage.loadAllLocalPosts() || [];
+
+    // 重複排除してローカルの全投稿を統合
+    const localIdSet = new Set();
+    const localPosts = [];
+    for (const postList of [localPostsByUser, localPostsGlobal, allLocalPosts]) {
+      for (const post of postList) {
+        if (post && post.text && !localIdSet.has(String(post.id))) {
+          localIdSet.add(String(post.id));
+          localPosts.push(post);
         }
-      } catch (error) {
-        console.error('Error loading posts from server:', error);
       }
-      
-      // ローカルにあってサーバーにない投稿を自動的にサルベージ
+    }
+
+    // Step 2: サーバー（Excel）からユーザーの投稿を取得
+    let serverPosts = [];
+    let serverReachable = false;
+    try {
+      const response = await fetch(`/api/get-all-posts?userName=${encodeURIComponent(username)}`);
+      const data = await response.json();
+      if (data.success && data.posts) {
+        serverPosts = data.posts;
+        serverReachable = true;
+      }
+    } catch (error) {
+      console.error('Error loading posts from server:', error);
+    }
+
+    // Step 3: サルベージ処理（サーバーに到達できた場合のみ）
+    let salvageSuccess = 0;
+    let salvageFailed = 0;
+    if (serverReachable) {
       const serverPostIds = new Set(serverPosts.map(p => String(p.id)));
-      const unsyncedPosts = localPosts.filter(p => !serverPostIds.has(String(p.id)) && p.text);
-      
+      const unsyncedPosts = localPosts.filter(p =>
+        !serverPostIds.has(String(p.id)) && p.text && !p.isOriginal
+      );
+
       if (unsyncedPosts.length > 0) {
         console.log(`[サルベージ] ${unsyncedPosts.length}件の未同期投稿を検出`);
-        
+
         for (const post of unsyncedPosts) {
           try {
             const saveResponse = await fetch('/api/save-post', {
@@ -175,22 +199,25 @@ export default function MobileInputTabs() {
                 text: post.text,
                 category: post.category || 0,
                 reason: post.reason || '',
-                userName: username
+                userName: post.userName || post.username || username
               })
             });
-            
+
             const saveResult = await saveResponse.json();
             if (saveResult.success) {
               console.log(`[サルベージ成功] ID: ${post.id}`);
               post.synced = true;
+              salvageSuccess++;
             } else {
               console.error(`[サルベージ失敗] ID: ${post.id}`, saveResult.error);
+              salvageFailed++;
             }
           } catch (err) {
             console.error(`[サルベージエラー] ID: ${post.id}`, err);
+            salvageFailed++;
           }
         }
-        
+
         // サルベージ後、再度サーバーから最新データを取得
         try {
           const refreshResponse = await fetch(`/api/get-all-posts?userName=${encodeURIComponent(username)}`);
@@ -202,44 +229,58 @@ export default function MobileInputTabs() {
           console.error('Error refreshing posts:', err);
         }
       }
-      
-      // マージ：サーバーの投稿 + ローカルのみの投稿（サルベージ失敗分）
-      const mergedPosts = [...serverPosts];
-      const mergedIds = new Set(mergedPosts.map(p => String(p.id)));
-      for (const localPost of localPosts) {
-        if (!mergedIds.has(String(localPost.id)) && localPost.text) {
-          mergedPosts.push({ ...localPost, synced: false });
-        }
-      }
-      
-      // 時系列でソート（新しいものが先）
-      mergedPosts.sort((a, b) => {
-        const dateA = new Date(a.timestamp || a.date || 0);
-        const dateB = new Date(b.timestamp || b.date || 0);
-        return dateB - dateA;
-      });
-      
-      setPosts(mergedPosts);
-      storage.savePosts(mergedPosts);
-      
-      // サーバーからシェアされた投稿を読み込み
-      fetch('/api/get-shared-posts')
-        .then(response => response.json())
-        .then(data => {
-          if (data.success) {
-            setSharedPosts(data.posts || []);
-          }
-        })
-        .catch(error => {
-          console.error('Error loading shared posts:', error);
-          const savedSharedPosts = storage.loadSharedPosts() || [];
-          setSharedPosts(savedSharedPosts);
-        });
-      
-      // いいねした投稿を読み込み
-      const savedLikedPosts = storage.getLikedPosts() || [];
-      setLikedPosts(savedLikedPosts);
     }
+
+    // Step 4: マージ（サーバーの投稿 + ローカルのみの投稿）
+    const mergedPosts = [...serverPosts];
+    const mergedIds = new Set(mergedPosts.map(p => String(p.id)));
+    for (const localPost of localPosts) {
+      if (!mergedIds.has(String(localPost.id)) && localPost.text) {
+        mergedPosts.push({ ...localPost, synced: false });
+      }
+    }
+
+    mergedPosts.sort((a, b) => {
+      const dateA = new Date(a.timestamp || a.date || 0);
+      const dateB = new Date(b.timestamp || b.date || 0);
+      return dateB - dateA;
+    });
+
+    setPosts(mergedPosts);
+    storage.savePosts(mergedPosts, username);
+
+    // Step 5: サルベージ結果をユーザーに通知
+    if (salvageSuccess > 0 || salvageFailed > 0) {
+      const msg = salvageFailed > 0
+        ? `${salvageSuccess}件の記録をサーバーに保存しました（${salvageFailed}件失敗 - 次回ログイン時に再試行します）`
+        : `${salvageSuccess}件の記録をサーバーに保存しました`;
+      setSyncStatus(msg);
+      setTimeout(() => setSyncStatus(null), 8000);
+    } else if (!serverReachable && localPosts.length > 0) {
+      setSyncStatus('サーバーに接続できません。記録はブラウザに安全に保持されています。次回接続時に自動同期します。');
+      setTimeout(() => setSyncStatus(null), 8000);
+    }
+
+    // Step 6: シェアされた投稿を読み込み
+    fetch('/api/get-shared-posts')
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          setSharedPosts(data.posts || []);
+          const alreadyLiked = (data.posts || [])
+            .filter(post => post.likes && post.likes[username] === true)
+            .map(post => post.id);
+          setLikedPosts(alreadyLiked);
+          storage.setLikedPosts(alreadyLiked);
+        }
+      })
+      .catch(error => {
+        console.error('Error loading shared posts:', error);
+        const savedSharedPosts = storage.loadSharedPosts() || [];
+        setSharedPosts(savedSharedPosts);
+        const savedLikedPosts = storage.getLikedPosts() || [];
+        setLikedPosts(savedLikedPosts);
+      });
   };
   
   // スケジュール保存
@@ -899,11 +940,11 @@ export default function MobileInputTabs() {
           storage.addPost(elementPost);
         }
       } else {
-        // Excelに更新を送信
         const editResponse = await fetch('/api/save-post', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
+            id: postId,
             text: editText,
             category: updatedPost.category,
             reason: updatedPost.reason,
@@ -2097,15 +2138,19 @@ export default function MobileInputTabs() {
                       </div>
                       <div style={styles.sharedPostText}>{post.text}</div>
                       <div style={styles.sharedPostFooter}>
-                        <button
-                          style={{
-                            ...styles.likeButton,
-                            ...(isLiked ? styles.likedButton : {})
-                          }}
-                          onClick={() => handleLike(post.id)}
-                        >
-                          {isLiked ? '❤️' : '🤍'} {likeCount}
-                        </button>
+                        {isMyPost ? (
+                          <span style={styles.likeCountDisplay}>❤️ {likeCount}</span>
+                        ) : (
+                          <button
+                            style={{
+                              ...styles.likeButton,
+                              ...(isLiked ? styles.likedButton : {})
+                            }}
+                            onClick={() => handleLike(post.id)}
+                          >
+                            {isLiked ? '❤️' : '🤍'} {likeCount}
+                          </button>
+                        )}
                       </div>
                     </div>
                   );
@@ -2482,6 +2527,13 @@ export default function MobileInputTabs() {
           </button>
         ))}
       </nav>
+
+      {/* 同期・サルベージ状態表示 */}
+      {syncStatus && (
+        <div style={styles.syncStatus}>
+          <span>{syncStatus}</span>
+        </div>
+      )}
 
       {/* タブコンテンツ */}
       {renderTabContent()}
@@ -3220,12 +3272,14 @@ const styles = {
   },
   
   syncStatus: {
-    marginTop: '8px',
-    padding: '8px 16px',
-    backgroundColor: 'rgba(0,0,0,0.8)',
+    margin: '8px 16px',
+    padding: '10px 16px',
+    backgroundColor: '#1E40AF',
     color: 'white',
-    borderRadius: '16px',
-    fontSize: '12px'
+    borderRadius: '8px',
+    fontSize: '13px',
+    textAlign: 'center',
+    boxShadow: '0 2px 8px rgba(30, 64, 175, 0.3)'
   },
   
   daySelector: {
@@ -3394,6 +3448,14 @@ const styles = {
   
   likedButton: {
     backgroundColor: '#FFE0E0'
+  },
+  
+  likeCountDisplay: {
+    fontSize: '14px',
+    color: '#6B7280',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
   },
   
   // 確認ダイアログ

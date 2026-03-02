@@ -33,7 +33,7 @@ export default async function handler(req, res) {
     
     // 学生のみをフィルタリング
     const students = allUsers
-      .filter(user => user.role === 'student')
+      .filter(user => user.role === 'student' && !user.isTest)
       .map(user => {
         const primaryFacility = user.schedule?.day1 || user.facilities?.[0] || null;
         return {

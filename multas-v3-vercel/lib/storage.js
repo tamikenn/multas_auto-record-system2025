@@ -4,23 +4,36 @@ const STORAGE_KEY = 'multas_v3_posts';
 const GAME_DATA_KEY = 'multas_v3_game';
 const SETTINGS_KEY = 'multas_v3_settings';
 const USER_KEY = 'multas_v3_user';
+const SALVAGE_BACKUP_PREFIX = 'multas_v3_salvage_backup_';
+
+function getUserPostsKey(username) {
+  return username ? `multas_v3_posts_${username}` : STORAGE_KEY;
+}
 
 export const storage = {
-  // 投稿を保存
-  savePosts: (posts) => {
+  // 投稿を保存（ユーザー別キー + 旧グローバルキーにも書く互換性保持）
+  savePosts: (posts, username) => {
     try {
       if (typeof window !== 'undefined') {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(posts));
+        const data = JSON.stringify(posts);
+        localStorage.setItem(STORAGE_KEY, data);
+        if (username) {
+          localStorage.setItem(getUserPostsKey(username), data);
+        }
       }
     } catch (error) {
       console.error('保存エラー:', error);
     }
   },
 
-  // 投稿を読み込み
-  loadPosts: () => {
+  // 投稿を読み込み（ユーザー別キー優先、なければグローバルキー）
+  loadPosts: (username) => {
     try {
       if (typeof window !== 'undefined') {
+        if (username) {
+          const userData = localStorage.getItem(getUserPostsKey(username));
+          if (userData) return JSON.parse(userData);
+        }
         const data = localStorage.getItem(STORAGE_KEY);
         return data ? JSON.parse(data) : [];
       }
@@ -31,7 +44,54 @@ export const storage = {
     return [];
   },
 
-  // 投稿を追加（既存データに追加）
+  // ローカルデータのスナップショットを保存（サルベージ前のバックアップ）
+  createSalvageBackup: (username) => {
+    try {
+      if (typeof window === 'undefined') return;
+      const posts = storage.loadPosts(username);
+      if (posts && posts.length > 0) {
+        const key = SALVAGE_BACKUP_PREFIX + (username || 'global') + '_' + Date.now();
+        localStorage.setItem(key, JSON.stringify({
+          username,
+          timestamp: new Date().toISOString(),
+          postCount: posts.length,
+          posts
+        }));
+      }
+    } catch (error) {
+      console.error('サルベージバックアップ作成エラー:', error);
+    }
+  },
+
+  // 全ユーザーの投稿を横断的に取得（サルベージ漏れ防止用）
+  loadAllLocalPosts: () => {
+    try {
+      if (typeof window === 'undefined') return [];
+      const allPosts = [];
+      const seenIds = new Set();
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && (key === STORAGE_KEY || key.startsWith('multas_v3_posts_'))) {
+          try {
+            const data = JSON.parse(localStorage.getItem(key));
+            if (Array.isArray(data)) {
+              for (const post of data) {
+                if (post && post.text && !seenIds.has(String(post.id))) {
+                  seenIds.add(String(post.id));
+                  allPosts.push(post);
+                }
+              }
+            }
+          } catch (e) { /* skip corrupted entries */ }
+        }
+      }
+      return allPosts;
+    } catch (error) {
+      console.error('全ローカル投稿読み込みエラー:', error);
+      return [];
+    }
+  },
+
   addPost: (newPost) => {
     const posts = storage.loadPosts();
     const updatedPosts = [newPost, ...posts];
@@ -39,7 +99,6 @@ export const storage = {
     return updatedPosts;
   },
 
-  // 投稿を削除
   removePost: (postId) => {
     const posts = storage.loadPosts();
     const updatedPosts = posts.filter(p => p.id !== postId);
@@ -47,7 +106,6 @@ export const storage = {
     return updatedPosts;
   },
 
-  // 投稿を更新
   updatePost: (updatedPost) => {
     const posts = storage.loadPosts();
     const index = posts.findIndex(p => p.id === updatedPost.id);
@@ -58,7 +116,6 @@ export const storage = {
     return posts;
   },
 
-  // データをクリア（開発用）
   clearPosts: () => {
     if (typeof window !== 'undefined') {
       localStorage.removeItem(STORAGE_KEY);
