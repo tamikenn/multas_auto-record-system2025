@@ -788,6 +788,23 @@ export default function MobileInputTabs() {
       postsToRemove.push(...relatedElements.map(p => p.id));
     }
     
+    // サーバーから削除
+    for (const id of postsToRemove) {
+      try {
+        const response = await fetch('/api/delete-post', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ postId: id, userName: currentUser })
+        });
+        const result = await response.json();
+        if (!result.success && response.status !== 404) {
+          console.error('Delete error:', result);
+        }
+      } catch (error) {
+        console.error('Delete request failed:', error);
+      }
+    }
+    
     // ローカルストレージから削除
     postsToRemove.forEach(id => storage.removePost(id));
     const updatedPosts = (posts || []).filter(p => !postsToRemove.includes(p.id));
