@@ -140,10 +140,29 @@ export default function MobileInputTabs() {
   };
 
   // ユーザーデータを読み込む関数
-  const loadUserData = (username) => {
+  const loadUserData = async (username) => {
     if (username) {
-      const savedPosts = storage.loadPosts() || [];
-      setPosts(savedPosts);
+      // サーバー（Excel）からユーザーの投稿を取得
+      try {
+        const response = await fetch(`/api/get-all-posts?userName=${encodeURIComponent(username)}`);
+        const data = await response.json();
+        
+        if (data.success && data.posts) {
+          // サーバーから取得した投稿をセット
+          setPosts(data.posts);
+          // ローカルストレージにも同期（オフライン用）
+          storage.savePosts(data.posts);
+        } else {
+          // サーバーから取得できない場合はローカルストレージから
+          const savedPosts = storage.loadPosts() || [];
+          setPosts(savedPosts);
+        }
+      } catch (error) {
+        console.error('Error loading posts from server:', error);
+        // オフライン時はローカルストレージから
+        const savedPosts = storage.loadPosts() || [];
+        setPosts(savedPosts);
+      }
       
       // サーバーからシェアされた投稿を読み込み
       fetch('/api/get-shared-posts')
