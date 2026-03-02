@@ -50,7 +50,7 @@ export default function AdminPage() {
       const [usersRes, loginRes, postsRes] = await Promise.all([
         fetch('/api/auth/users'),
         fetch('/api/get-login-status'),
-        fetch('/api/get-all-posts'),
+        fetch('/api/get-all-posts?includeTest=true'),
       ]);
       const usersData = await usersRes.json();
       const loginData = await loginRes.json();

@@ -87,7 +87,7 @@ export default async function handler(req, res) {
 
   try {
     const storage = getStorageSync();
-    const { userName, limit, offset } = req.query;
+    const { userName, limit, offset, includeTest } = req.query;
 
     // 投稿を取得
     let posts;
@@ -102,11 +102,13 @@ export default async function handler(req, res) {
     // ソート
     posts = sortPostsByDate(posts);
 
-    // テストユーザーを統計から除外
-    const testUserNames = new Set(
-      getAllUsers().filter(u => u.isTest).map(u => u.username)
-    );
-    const postsForStats = userName ? posts : posts.filter(p => !testUserNames.has(p.userName));
+    let postsForStats = posts;
+    if (!userName && includeTest !== 'true') {
+      const testUserNames = new Set(
+        getAllUsers().filter(u => u.isTest).map(u => u.username)
+      );
+      postsForStats = posts.filter(p => !testUserNames.has(p.userName));
+    }
     const studentStats = calculateStudentStats(postsForStats);
 
     // ページネーション（オプション）
