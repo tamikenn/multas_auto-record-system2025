@@ -139,30 +139,88 @@ export default function MobileInputTabs() {
     return date.getDay() === 1;
   };
 
-  // ユーザーデータを読み込む関数
+  // ユーザーデータを読み込む関数（ローカルストレージの未同期データを自動サルベージ）
   const loadUserData = async (username) => {
     if (username) {
+      // まずローカルストレージから投稿を取得（サルベージ用）
+      const localPosts = storage.loadPosts() || [];
+      
       // サーバー（Excel）からユーザーの投稿を取得
+      let serverPosts = [];
       try {
         const response = await fetch(`/api/get-all-posts?userName=${encodeURIComponent(username)}`);
         const data = await response.json();
         
         if (data.success && data.posts) {
-          // サーバーから取得した投稿をセット
-          setPosts(data.posts);
-          // ローカルストレージにも同期（オフライン用）
-          storage.savePosts(data.posts);
-        } else {
-          // サーバーから取得できない場合はローカルストレージから
-          const savedPosts = storage.loadPosts() || [];
-          setPosts(savedPosts);
+          serverPosts = data.posts;
         }
       } catch (error) {
         console.error('Error loading posts from server:', error);
-        // オフライン時はローカルストレージから
-        const savedPosts = storage.loadPosts() || [];
-        setPosts(savedPosts);
       }
+      
+      // ローカルにあってサーバーにない投稿を自動的にサルベージ
+      const serverPostIds = new Set(serverPosts.map(p => String(p.id)));
+      const unsyncedPosts = localPosts.filter(p => !serverPostIds.has(String(p.id)) && p.text);
+      
+      if (unsyncedPosts.length > 0) {
+        console.log(`[サルベージ] ${unsyncedPosts.length}件の未同期投稿を検出`);
+        
+        for (const post of unsyncedPosts) {
+          try {
+            const saveResponse = await fetch('/api/save-post', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                id: post.id,
+                text: post.text,
+                category: post.category || 0,
+                reason: post.reason || '',
+                userName: username
+              })
+            });
+            
+            const saveResult = await saveResponse.json();
+            if (saveResult.success) {
+              console.log(`[サルベージ成功] ID: ${post.id}`);
+              post.synced = true;
+            } else {
+              console.error(`[サルベージ失敗] ID: ${post.id}`, saveResult.error);
+            }
+          } catch (err) {
+            console.error(`[サルベージエラー] ID: ${post.id}`, err);
+          }
+        }
+        
+        // サルベージ後、再度サーバーから最新データを取得
+        try {
+          const refreshResponse = await fetch(`/api/get-all-posts?userName=${encodeURIComponent(username)}`);
+          const refreshData = await refreshResponse.json();
+          if (refreshData.success && refreshData.posts) {
+            serverPosts = refreshData.posts;
+          }
+        } catch (err) {
+          console.error('Error refreshing posts:', err);
+        }
+      }
+      
+      // マージ：サーバーの投稿 + ローカルのみの投稿（サルベージ失敗分）
+      const mergedPosts = [...serverPosts];
+      const mergedIds = new Set(mergedPosts.map(p => String(p.id)));
+      for (const localPost of localPosts) {
+        if (!mergedIds.has(String(localPost.id)) && localPost.text) {
+          mergedPosts.push({ ...localPost, synced: false });
+        }
+      }
+      
+      // 時系列でソート（新しいものが先）
+      mergedPosts.sort((a, b) => {
+        const dateA = new Date(a.timestamp || a.date || 0);
+        const dateB = new Date(b.timestamp || b.date || 0);
+        return dateB - dateA;
+      });
+      
+      setPosts(mergedPosts);
+      storage.savePosts(mergedPosts);
       
       // サーバーからシェアされた投稿を読み込み
       fetch('/api/get-shared-posts')
@@ -379,41 +437,53 @@ export default function MobileInputTabs() {
     setShareConfirmPost(null);
   };
   
-  // LocalStorageの投稿をサーバーに同期
-  const syncLocalToServer = async () => {
-    setSyncStatus('同期中...');
+  // LocalStorageの投稿をサーバーに同期（forceAll=trueで全投稿を強制再同期）
+  const syncLocalToServer = async (forceAll = false) => {
+    setSyncStatus(forceAll ? '全投稿をサルベージ中...' : '同期中...');
     
     try {
-      // LocalStorageから未同期の投稿を取得
+      // LocalStorageから投稿を取得
       const localPosts = posts || [];
       let syncCount = 0;
       let errorCount = 0;
+      let skipCount = 0;
+      const errors = [];
       
       for (const post of localPosts) {
-        // サーバーに未送信の投稿を送信
-        if (!post.synced) {
+        // forceAll=trueなら全投稿、falseなら未同期のみ
+        if (forceAll || !post.synced) {
+          // isOriginalやhasElementsを持つオリジナル投稿はスキップ（要素のみ同期）
+          if (post.isOriginal && post.hasElements) {
+            skipCount++;
+            continue;
+          }
+          
           try {
             const response = await fetch('/api/save-post', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
+                id: post.id,
                 text: post.text,
                 category: post.category,
                 reason: post.reason,
-                userName: post.userName || currentUser
+                userName: post.userName || post.username || currentUser
               })
             });
             
-            if (response.ok) {
-              // 同期成功フラグを設定
+            const result = await response.json();
+            
+            if (response.ok && result.success) {
               post.synced = true;
               syncCount++;
             } else {
               errorCount++;
+              errors.push(`${post.text?.substring(0, 20)}...: ${result.error || 'Unknown error'}`);
             }
           } catch (error) {
             console.error('Sync error for post:', error);
             errorCount++;
+            errors.push(`${post.text?.substring(0, 20)}...: ${error.message}`);
           }
         }
       }
@@ -423,18 +493,35 @@ export default function MobileInputTabs() {
       
       // 結果を表示
       if (syncCount > 0 || errorCount > 0) {
-        setSyncStatus(`同期完了: ${syncCount}件成功${errorCount > 0 ? `, ${errorCount}件失敗` : ''}`);
+        const message = forceAll 
+          ? `サルベージ完了: ${syncCount}件保存${errorCount > 0 ? `, ${errorCount}件失敗` : ''}${skipCount > 0 ? ` (${skipCount}件スキップ)` : ''}`
+          : `同期完了: ${syncCount}件成功${errorCount > 0 ? `, ${errorCount}件失敗` : ''}`;
+        setSyncStatus(message);
+        if (errors.length > 0) {
+          console.error('Sync errors:', errors);
+        }
       } else {
-        setSyncStatus('同期済みの投稿のみです');
+        setSyncStatus(forceAll ? 'サルベージする投稿がありません' : '同期済みの投稿のみです');
       }
       
-      // 3秒後にメッセージを消去
-      setTimeout(() => setSyncStatus(null), 3000);
+      // 5秒後にメッセージを消去
+      setTimeout(() => setSyncStatus(null), 5000);
       
     } catch (error) {
       console.error('Sync error:', error);
-      setSyncStatus('同期エラーが発生しました');
-      setTimeout(() => setSyncStatus(null), 3000);
+      setSyncStatus('同期エラーが発生しました: ' + error.message);
+      setTimeout(() => setSyncStatus(null), 5000);
+    }
+  };
+  
+  // 全投稿を強制的にサーバーに再同期（サルベージ用）
+  const salvageAllPosts = async () => {
+    const confirmed = window.confirm(
+      `ブラウザに保存されている${posts?.length || 0}件の投稿をすべてサーバーに保存します。\n\n` +
+      '重複が発生する可能性がありますが、データの救出を優先しますか？'
+    );
+    if (confirmed) {
+      await syncLocalToServer(true);
     }
   };
   
@@ -570,7 +657,19 @@ export default function MobileInputTabs() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text })
       });
+      
+      if (!classifyResponse.ok) {
+        const errorData = await classifyResponse.json().catch(() => ({}));
+        console.error('Classification API error:', classifyResponse.status, errorData);
+        throw new Error(errorData.error || `分類に失敗しました (${classifyResponse.status})`);
+      }
+      
       const classifyData = await classifyResponse.json();
+      
+      if (classifyData.error) {
+        console.error('Classification error:', classifyData);
+        throw new Error(classifyData.error || '分類処理でエラーが発生しました');
+      }
       
       // 2. 複数要素の場合の処理
       let postsToAdd = [];
@@ -591,9 +690,10 @@ export default function MobileInputTabs() {
         });
         
         // 次に、分解された要素を保存（LIST/REPORT用）
+        const originalId = Date.now();
         for (const element of classifyData.elements) {
-          // Google Sheetsに各要素を保存
-          await fetch('/api/save-post', {
+          // Excelに各要素を保存
+          const elemResponse = await fetch('/api/save-post', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
@@ -604,20 +704,27 @@ export default function MobileInputTabs() {
             })
           });
           
+          const elemResult = await elemResponse.json();
+          if (!elemResult.success) {
+            console.error('Element save error:', elemResult);
+            throw new Error(elemResult.error || '要素の保存に失敗しました');
+          }
+          
           postsToAdd.push({
-            id: Date.now() + Math.random(),
+            id: elemResult.post?.id || Date.now() + Math.random(),
             text: element.text,
             category: element.category,
             reason: element.reason,
             timestamp: new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' }),
             isElement: true,
-            originalId: Date.now(),
-            username: currentUser
+            originalId: originalId,
+            username: currentUser,
+            synced: true
           });
         }
       } else {
         // 単一要素の場合（従来の処理）
-        await fetch('/api/save-post', {
+        const saveResponse = await fetch('/api/save-post', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
@@ -628,13 +735,20 @@ export default function MobileInputTabs() {
           })
         });
         
+        const saveResult = await saveResponse.json();
+        if (!saveResult.success) {
+          console.error('Save error:', saveResult);
+          throw new Error(saveResult.error || '投稿の保存に失敗しました');
+        }
+        
         postsToAdd.push({
-          id: Date.now(),
+          id: saveResult.post?.id || Date.now(),
           text,
           category: classifyData.category,
           reason: classifyData.reason,
           timestamp: new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' }),
-          username: currentUser
+          username: currentUser,
+          synced: true
         });
       }
       
@@ -697,7 +811,19 @@ export default function MobileInputTabs() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: editText })
       });
+      
+      if (!classifyResponse.ok) {
+        const errorData = await classifyResponse.json().catch(() => ({}));
+        console.error('Classification API error:', classifyResponse.status, errorData);
+        throw new Error(errorData.error || `分類に失敗しました (${classifyResponse.status})`);
+      }
+      
       const classifyData = await classifyResponse.json();
+      
+      if (classifyData.error) {
+        console.error('Classification error:', classifyData);
+        throw new Error(classifyData.error || '分類処理でエラーが発生しました');
+      }
       
       // 2. 既存の関連要素を削除
       let updatedPosts = [...posts];
@@ -732,11 +858,8 @@ export default function MobileInputTabs() {
             originalId: postId,
             userName: currentUser
           };
-          updatedPosts.push(elementPost);
-          storage.addPost(elementPost);
-          
-          // Google Sheetsに保存
-          await fetch('/api/save-post', {
+          // Excelに保存
+          const editElemResponse = await fetch('/api/save-post', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
@@ -746,10 +869,21 @@ export default function MobileInputTabs() {
               userName: currentUser
             })
           });
+          
+          const editElemResult = await editElemResponse.json();
+          if (!editElemResult.success) {
+            console.error('Edit element save error:', editElemResult);
+            throw new Error(editElemResult.error || '要素の保存に失敗しました');
+          }
+          
+          elementPost.id = editElemResult.post?.id || elementPost.id;
+          elementPost.synced = true;
+          updatedPosts.push(elementPost);
+          storage.addPost(elementPost);
         }
       } else {
-        // Google Sheetsに更新を送信
-        await fetch('/api/save-post', {
+        // Excelに更新を送信
+        const editResponse = await fetch('/api/save-post', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
@@ -759,6 +893,12 @@ export default function MobileInputTabs() {
             userName: currentUser
           })
         });
+        
+        const editResult = await editResponse.json();
+        if (!editResult.success) {
+          console.error('Edit save error:', editResult);
+          throw new Error(editResult.error || '編集の保存に失敗しました');
+        }
       }
       
       // 5. 元の投稿を更新
@@ -2328,26 +2468,6 @@ export default function MobileInputTabs() {
 
       {/* タブコンテンツ */}
       {renderTabContent()}
-      
-      {/* オフライン同期ボタン - 機能未実装のため非表示（次バージョンで対応予定） */}
-      {/* 
-      {activeTab === 'LOG' && (
-        <div style={styles.syncButtonContainer}>
-          <button
-            style={styles.syncButton}
-            onClick={syncLocalToServer}
-            disabled={syncStatus === '同期中...'}
-          >
-            🔄 オフライン投稿をアップロード
-          </button>
-          {syncStatus && (
-            <div style={styles.syncStatus}>
-              {syncStatus}
-            </div>
-          )}
-        </div>
-      )}
-      */}
 
       {/* Safari対策の白いスペーサー（LOG画面のみ） */}
       {activeTab === 'LOG' && <div style={styles.safariSpacer} />}
