@@ -31,28 +31,33 @@ export class HybridStorage {
   constructor() {
     /** @type {ExcelManager} */
     this.excelManager = new ExcelManager();
-    
+
     /** @type {SyncQueueItem[]} */
     this.syncQueue = [];
-    
+
     /** @type {boolean} */
     this.isSyncing = false;
-    
+
     /** @type {NodeJS.Timeout | null} */
     this.batchTimer = null;
 
     /** @type {google.auth.GoogleAuth | null} */
     this.googleAuth = null;
-    
+
     /** @type {any} */
     this.sheets = null;
-    
+
     /** @type {string | undefined} */
     this.spreadsheetId = GOOGLE_SHEETS_CONFIG.spreadsheetId;
 
-    // 初期化
-    this.initializeGoogleSheets();
-    this.startPeriodicSync();
+    /** @type {boolean} */
+    this.googleSheetsInitialized = false;
+
+    // Google Sheets初期化を遅延実行（コンストラクタをブロックしない）
+    setImmediate(() => {
+      this.initializeGoogleSheets();
+      this.startPeriodicSync();
+    });
   }
 
   /**
@@ -74,11 +79,13 @@ export class HybridStorage {
       });
 
       this.sheets = google.sheets({ version: 'v4', auth: this.googleAuth });
+      this.googleSheetsInitialized = true;
       logger.info('Google Sheets認証完了');
     } catch (error) {
       logger.error('Google Sheets認証エラー', error);
       this.googleAuth = null;
       this.sheets = null;
+      this.googleSheetsInitialized = false;
     }
   }
 
